@@ -7,193 +7,233 @@
 #include <sstream>
 #include <algorithm>
 #include <iomanip>
-#include <dirent.h>    // ÓÃÓÚÄ¿Â¼±éÀú
+#include <dirent.h> // ç”¨äºç›®å½•éå†
 
 using namespace std;
 
-// TokenÀà±ğ
-enum TokenCategory {
-    KEYWORD,        // ¹Ø¼ü×Ö
-    IDENTIFIER,     // ±êÊ¶·û
-    OPERATOR,       // ÔËËã·û
-    DELIMITER,      // ½ç·û
-    CONSTANT,       // ³£Á¿
-    UNKNOWN         // Î´ÖªÀàĞÍ
+// Tokenç±»åˆ«
+enum TokenCategory
+{
+    KEYWORD,    // å…³é”®å­—
+    IDENTIFIER, // æ ‡è¯†ç¬¦
+    OPERATOR,   // è¿ç®—ç¬¦
+    DELIMITER,  // ç•Œç¬¦
+    CONSTANT,   // å¸¸é‡
+    UNKNOWN     // æœªçŸ¥ç±»å‹
 };
 
-// Token¾ßÌåÀàĞÍ
-struct TokenType {
-    string name;           // tokenÃû³Æ
-    TokenCategory category;// tokenÀà±ğ
-    
-    // Ìí¼ÓÄ¬ÈÏ¹¹Ôìº¯Êı
+// Tokenå…·ä½“ç±»å‹
+struct TokenType
+{
+    string name;            // tokenåç§°
+    TokenCategory category; // tokenç±»åˆ«
+
+    // æ·»åŠ é»˜è®¤æ„é€ å‡½æ•°
     TokenType() : name(""), category(UNKNOWN) {}
-    
-    // ±£³ÖÔ­ÓĞµÄ¹¹Ôìº¯Êı
+
+    // ä¿æŒåŸæœ‰çš„æ„é€ å‡½æ•°
     TokenType(string n, TokenCategory c) : name(n), category(c) {}
 };
 
-// Token½á¹¹
-struct Token {
-    string lexeme;        // ´ÊËØ
-    TokenType type;       // tokenÀàĞÍ
-    int line;            // ĞĞºÅ
-    
-    // Ìí¼ÓÄ¬ÈÏ¹¹Ôìº¯Êı
+// Tokenç»“æ„
+struct Token
+{
+    string lexeme;  // è¯ç´ 
+    TokenType type; // tokenç±»å‹
+    int line;       // è¡Œå·
+
+    // æ·»åŠ é»˜è®¤æ„é€ å‡½æ•°
     Token() : lexeme(""), type(TokenType("", UNKNOWN)), line(0) {}
-    
-    // ±£³ÖÔ­ÓĞµÄ¹¹Ôìº¯Êı
+
+    // ä¿æŒåŸæœ‰çš„æ„é€ å‡½æ•°
     Token(string l, TokenType t, int ln) : lexeme(l), type(t), line(ln) {}
 };
 
-class Lexer {
+class Lexer
+{
 private:
     string input;
     int position;
     int lineNo;
     char currentChar;
-    
-    // ¹Ø¼ü×Ö±í
+
+    // å…³é”®å­—è¡¨
     vector<string> keywords = {
-        "int", "if", "else", "while", "for", "return", "void", "main", "print"
-    };
-    
-    // ÔËËã·û±í
+        "int", "if", "else", "while", "for", "return", "void", "main", "print"};
+
+    // è¿ç®—ç¬¦è¡¨
     vector<string> operators = {
         "+", "-", "*", "/", "%", "^",
         "=", "==", "!=", ">", "<", ">=", "<=",
-        "&&", "||", "!"
-    };
-    
-    // ½ç·û±í
+        "&&", "||", "!"};
+
+    // ç•Œç¬¦è¡¨
     vector<string> delimiters = {
-        "(", ")", "{", "}", "[", "]", ";", ",", "."
-    };
+        "(", ")", "{", "}", "[", "]", ";", ",", "."};
 
 public:
-    Lexer(string text) : input(text), position(0), lineNo(1) {
+    Lexer(string text) : input(text), position(0), lineNo(1)
+    {
         currentChar = position < input.length() ? input[position] : '\0';
     }
-    
-    void advance() {
+
+    void advance()
+    {
         position++;
-        if (currentChar == '\n') lineNo++;
+        if (currentChar == '\n')
+            lineNo++;
         currentChar = position < input.length() ? input[position] : '\0';
     }
-    
-    void skipWhitespace() {
-        while (currentChar != '\0' && isspace(currentChar)) {
+
+    void skipWhitespace()
+    {
+        while (currentChar != '\0' && isspace(currentChar))
+        {
             advance();
         }
     }
-    
-    // ÅĞ¶ÏÊÇ·ñÊÇ¹Ø¼ü×Ö
-    bool isKeyword(const string& str) {
-        for(const auto& keyword : keywords) {
-            if(keyword == str) return true;
-        }
-        return false;
-    }
-    
-    // ÅĞ¶ÏÊÇ·ñÊÇÔËËã·û
-    bool isOperator(const string& str) {
-        for(const auto& op : operators) {
-            if(op == str) return true;
-        }
-        return false;
-    }
-    
-    // ÅĞ¶ÏÊÇ·ñÊÇ½ç·û
-    bool isDelimiter(const string& str) {
-        for(const auto& delim : delimiters) {
-            if(delim == str) return true;
+
+    // åˆ¤æ–­æ˜¯å¦æ˜¯å…³é”®å­—
+    bool isKeyword(const string &str)
+    {
+        for (const auto &keyword : keywords)
+        {
+            if (keyword == str)
+                return true;
         }
         return false;
     }
 
-    Token getNextToken() {
-        while (currentChar != '\0') {
-            // Ìø¹ı¿Õ°××Ö·û
-            if (isspace(currentChar)) {
+    // åˆ¤æ–­æ˜¯å¦æ˜¯è¿ç®—ç¬¦
+    bool isOperator(const string &str)
+    {
+        for (const auto &op : operators)
+        {
+            if (op == str)
+                return true;
+        }
+        return false;
+    }
+
+    // åˆ¤æ–­æ˜¯å¦æ˜¯ç•Œç¬¦
+    bool isDelimiter(const string &str)
+    {
+        for (const auto &delim : delimiters)
+        {
+            if (delim == str)
+                return true;
+        }
+        return false;
+    }
+
+    Token getNextToken()
+    {
+        while (currentChar != '\0')
+        {
+            // è·³è¿‡ç©ºç™½å­—ç¬¦
+            if (isspace(currentChar))
+            {
                 skipWhitespace();
                 continue;
             }
 
-            // ´¦Àí×¢ÊÍ
-            if (currentChar == '/') {
+            // å¤„ç†æ³¨é‡Š
+            if (currentChar == '/')
+            {
                 advance();
-                if (currentChar == '/') {  // µ¥ĞĞ×¢ÊÍ
-                    while (currentChar != '\0' && currentChar != '\n') {
+                if (currentChar == '/')
+                { // å•è¡Œæ³¨é‡Š
+                    while (currentChar != '\0' && currentChar != '\n')
+                    {
                         advance();
                     }
                     continue;
-                } else if (currentChar == '*') {  // ¶àĞĞ×¢ÊÍ
+                }
+                else if (currentChar == '*')
+                { // å¤šè¡Œæ³¨é‡Š
                     advance();
-                    while (currentChar != '\0') {
-                        if (currentChar == '*') {
+                    while (currentChar != '\0')
+                    {
+                        if (currentChar == '*')
+                        {
                             advance();
-                            if (currentChar == '/') {
+                            if (currentChar == '/')
+                            {
                                 advance();
                                 break;
                             }
-                        } else {
+                        }
+                        else
+                        {
                             advance();
                         }
                     }
                     continue;
-                } else {
-                    // Èç¹û²»ÊÇ×¢ÊÍ£¬ÄÇ¾ÍÊÇ³ı·¨ÔËËã·û
+                }
+                else
+                {
+                    // å¦‚æœä¸æ˜¯æ³¨é‡Šï¼Œé‚£å°±æ˜¯é™¤æ³•è¿ç®—ç¬¦
                     return Token("/", TokenType("OPERATOR", OPERATOR), lineNo);
                 }
             }
 
-            // Ê¶±ğÊı×Ö³£Á¿
-            if (isdigit(currentChar)) {
+            // è¯†åˆ«æ•°å­—å¸¸é‡
+            if (isdigit(currentChar))
+            {
                 string num;
-                while (currentChar != '\0' && isdigit(currentChar)) {
+                while (currentChar != '\0' && isdigit(currentChar))
+                {
                     num += currentChar;
                     advance();
                 }
                 return Token(num, TokenType("CONSTANT", CONSTANT), lineNo);
             }
 
-            // Ê¶±ğ±êÊ¶·ûºÍ¹Ø¼ü×Ö
-            if (isalpha(currentChar) || currentChar == '_') {
+            // è¯†åˆ«æ ‡è¯†ç¬¦å’Œå…³é”®å­—
+            if (isalpha(currentChar) || currentChar == '_')
+            {
                 string identifier;
-                while (currentChar != '\0' && (isalnum(currentChar) || currentChar == '_')) {
+                while (currentChar != '\0' && (isalnum(currentChar) || currentChar == '_'))
+                {
                     identifier += currentChar;
                     advance();
                 }
-                
-                if (isKeyword(identifier)) {
+
+                if (isKeyword(identifier))
+                {
                     return Token(identifier, TokenType("KEYWORD", KEYWORD), lineNo);
                 }
                 return Token(identifier, TokenType("IDENTIFIER", IDENTIFIER), lineNo);
             }
 
-            // Ê¶±ğÔËËã·ûºÍ½ç·û
+            // è¯†åˆ«è¿ç®—ç¬¦å’Œç•Œç¬¦
             string op;
             op += currentChar;
             advance();
-            
-            // ´¦ÀíË«×Ö·ûÔËËã·û
-            if ((op == "=" || op == "!" || op == ">" || op == "<") && currentChar == '=') {
-                op += currentChar;
-                advance();
-            } else if ((op == "&" && currentChar == '&') || (op == "|" && currentChar == '|')) {
+
+            // å¤„ç†åŒå­—ç¬¦è¿ç®—ç¬¦
+            if ((op == "=" || op == "!" || op == ">" || op == "<") && currentChar == '=')
+            {
                 op += currentChar;
                 advance();
             }
-            
-            if (isOperator(op)) {
+            else if ((op == "&" && currentChar == '&') || (op == "|" && currentChar == '|'))
+            {
+                op += currentChar;
+                advance();
+            }
+
+            if (isOperator(op))
+            {
                 return Token(op, TokenType("OPERATOR", OPERATOR), lineNo);
             }
-            if (isDelimiter(op)) {
+            if (isDelimiter(op))
+            {
                 return Token(op, TokenType("DELIMITER", DELIMITER), lineNo);
             }
 
-            // Èç¹ûÓöµ½Î´Öª×Ö·û
-            string errorMsg = "Î´Öª×Ö·û: " + op;
+            // å¦‚æœé‡åˆ°æœªçŸ¥å­—ç¬¦
+            string errorMsg = "æœªçŸ¥å­—ç¬¦: " + op;
             throw runtime_error(errorMsg);
         }
 
@@ -201,707 +241,850 @@ public:
     }
 };
 
-// ´òÓ¡TokenĞÅÏ¢µÄ¸¨Öúº¯Êı
-string getCategoryName(TokenCategory cat) {
-    switch(cat) {
-        case KEYWORD: return "¹Ø¼ü×Ö";
-        case IDENTIFIER: return "±êÊ¶·û";
-        case OPERATOR: return "ÔËËã·û";
-        case DELIMITER: return "½ç·û";
-        case CONSTANT: return "³£Á¿";
-        default: return "Î´ÖªÀàĞÍ";
+// æ‰“å°Tokenä¿¡æ¯çš„è¾…åŠ©å‡½æ•°
+string getCategoryName(TokenCategory cat)
+{
+    switch (cat)
+    {
+    case KEYWORD:
+        return "å…³é”®å­—";
+    case IDENTIFIER:
+        return "æ ‡è¯†ç¬¦";
+    case OPERATOR:
+        return "è¿ç®—ç¬¦";
+    case DELIMITER:
+        return "ç•Œç¬¦";
+    case CONSTANT:
+        return "å¸¸é‡";
+    default:
+        return "æœªçŸ¥ç±»å‹";
     }
 }
 
-// ³éÏóÓï·¨Ê÷½ÚµãÀàĞÍ
-enum class ASTNodeType {
-    PROGRAM,        // ³ÌĞò
-    FUNCTION_DECL,  // º¯ÊıÉùÃ÷
-    VAR_DECL,       // ±äÁ¿ÉùÃ÷
-    COMPOUND_STMT,  // ¸´ºÏÓï¾ä
-    ASSIGN_STMT,    // ¸³ÖµÓï¾ä
-    IF_STMT,        // ifÓï¾ä
-    WHILE_STMT,     // whileÓï¾ä
-    RETURN_STMT,    // returnÓï¾ä
-    BINARY_EXPR,    // ¶şÔª±í´ïÊ½
-    UNARY_EXPR,     // Ò»Ôª±í´ïÊ½
-    IDENTIFIER,     // ±êÊ¶·û
-    CONSTANT,       // ³£Á¿
-    EMPTY          // ¿ÕÓï¾ä
+// æŠ½è±¡è¯­æ³•æ ‘èŠ‚ç‚¹ç±»å‹
+enum class ASTNodeType
+{
+    PROGRAM,       // ç¨‹åº
+    FUNCTION_DECL, // å‡½æ•°å£°æ˜
+    VAR_DECL,      // å˜é‡å£°æ˜
+    COMPOUND_STMT, // å¤åˆè¯­å¥
+    ASSIGN_STMT,   // èµ‹å€¼è¯­å¥
+    IF_STMT,       // ifè¯­å¥
+    WHILE_STMT,    // whileè¯­å¥
+    RETURN_STMT,   // returnè¯­å¥
+    BINARY_EXPR,   // äºŒå…ƒè¡¨è¾¾å¼
+    UNARY_EXPR,    // ä¸€å…ƒè¡¨è¾¾å¼
+    IDENTIFIER,    // æ ‡è¯†ç¬¦
+    CONSTANT,      // å¸¸é‡
+    EMPTY          // ç©ºè¯­å¥
 };
 
-// ËÄÔªÊ½½á¹¹
-struct Quadruple {
-    string op;      // ²Ù×÷·û
-    string arg1;    // µÚÒ»¸ö²Ù×÷Êı
-    string arg2;    // µÚ¶ş¸ö²Ù×÷Êı
-    string result;  // ½á¹û
-    
-    Quadruple(string o, string a1, string a2, string r) 
+// å››å…ƒå¼ç»“æ„
+struct Quadruple
+{
+    string op;     // æ“ä½œç¬¦
+    string arg1;   // ç¬¬ä¸€ä¸ªæ“ä½œæ•°
+    string arg2;   // ç¬¬äºŒä¸ªæ“ä½œæ•°
+    string result; // ç»“æœ
+
+    Quadruple(string o, string a1, string a2, string r)
         : op(o), arg1(a1), arg2(a2), result(r) {}
-        
-    // ÓÃÓÚ´òÓ¡ËÄÔªÊ½
-    string toString() const {
+
+    // ç”¨äºæ‰“å°å››å…ƒå¼
+    string toString() const
+    {
         return "(" + op + ", " + arg1 + ", " + arg2 + ", " + result + ")";
     }
 };
 
-// ³éÏóÓï·¨Ê÷½Úµã
-class ASTNode {
+// æŠ½è±¡è¯­æ³•æ ‘èŠ‚ç‚¹
+class ASTNode
+{
 private:
-    static int tempVarCount;  // ÓÃÓÚÉú³ÉÁÙÊ±±äÁ¿Ãû
-    static int labelCount;    // ÓÃÓÚÉú³É±êÇ©
+    static int tempVarCount; // ç”¨äºç”Ÿæˆä¸´æ—¶å˜é‡å
+    static int labelCount;   // ç”¨äºç”Ÿæˆæ ‡ç­¾
 
 public:
     ASTNodeType type;
     string value;
-    vector<ASTNode*> children;
-    
+    vector<ASTNode *> children;
+
     ASTNode(ASTNodeType t, string v = "") : type(t), value(v) {}
-    
-    void addChild(ASTNode* child) {
+
+    void addChild(ASTNode *child)
+    {
         children.push_back(child);
     }
-    
-    // ĞŞ¸Ä print º¯Êı£¬Ìí¼ÓÒ»¸ö°ü×°º¯Êı
-    void print(ostream& out = cout) {
+
+    // ä¿®æ”¹ print å‡½æ•°ï¼Œæ·»åŠ ä¸€ä¸ªåŒ…è£…å‡½æ•°
+    void print(ostream &out = cout)
+    {
         vector<bool> levels;
         printTree(0, out, true, levels);
     }
 
-    // Éú³ÉĞÂµÄÁÙÊ±±äÁ¿Ãû
-    static string newTemp() {
+    // ç”Ÿæˆæ–°çš„ä¸´æ—¶å˜é‡å
+    static string newTemp()
+    {
         return "t" + to_string(tempVarCount++);
     }
-    
-    // Éú³ÉĞÂµÄ±êÇ©
-    static string newLabel() {
+
+    // ç”Ÿæˆæ–°çš„æ ‡ç­¾
+    static string newLabel()
+    {
         return "L" + to_string(labelCount++);
     }
-    
-    // Éú³ÉËÄÔªÊ½µÄ·½·¨
-    virtual vector<Quadruple> generateCode() {
+
+    // ç”Ÿæˆå››å…ƒå¼çš„æ–¹æ³•
+    virtual vector<Quadruple> generateCode()
+    {
         vector<Quadruple> code;
-        
-        switch(type) {
-            case ASTNodeType::PROGRAM:
-                for (auto child : children) {
-                    auto childCode = child->generateCode();
-                    code.insert(code.end(), childCode.begin(), childCode.end());
-                }
-                break;
-                
-            case ASTNodeType::FUNCTION_DECL: {
-                string funcName = children[0]->value;  // µÚÒ»¸ö×Ó½ÚµãÊÇº¯ÊıÃû
-                code.push_back(Quadruple("FUNC_BEGIN", funcName, "", ""));
-                
-                // ´¦Àíº¯ÊıÌå£¨µÚ¶ş¸ö×Ó½ÚµãÊÇ¸´ºÏÓï¾ä£©
-                for (size_t i = 1; i < children.size(); i++) {
-                    auto childCode = children[i]->generateCode();
-                    code.insert(code.end(), childCode.begin(), childCode.end());
-                }
-                
-                code.push_back(Quadruple("FUNC_END", funcName, "", ""));
-                break;
+
+        switch (type)
+        {
+        case ASTNodeType::PROGRAM:
+            for (auto child : children)
+            {
+                auto childCode = child->generateCode();
+                code.insert(code.end(), childCode.begin(), childCode.end());
             }
-                
-            case ASTNodeType::VAR_DECL: {
-                string varName = children[0]->value;  // ±äÁ¿Ãû
-                if (children.size() > 1) {  // ÓĞ³õÊ¼»¯Öµ
-                    auto initCode = children[1]->generateCode();
-                    code.insert(code.end(), initCode.begin(), initCode.end());
-                    code.push_back(Quadruple("=", children[1]->result, "", varName));
-                }
-                break;
+            break;
+
+        case ASTNodeType::FUNCTION_DECL:
+        {
+            string funcName = children[0]->value; // ç¬¬ä¸€ä¸ªå­èŠ‚ç‚¹æ˜¯å‡½æ•°å
+            code.push_back(Quadruple("FUNC_BEGIN", funcName, "", ""));
+
+            // å¤„ç†å‡½æ•°ä½“ï¼ˆç¬¬äºŒä¸ªå­èŠ‚ç‚¹æ˜¯å¤åˆè¯­å¥ï¼‰
+            for (size_t i = 1; i < children.size(); i++)
+            {
+                auto childCode = children[i]->generateCode();
+                code.insert(code.end(), childCode.begin(), childCode.end());
             }
-                
-            case ASTNodeType::ASSIGN_STMT: {
-                string varName = children[0]->value;
-                auto exprCode = children[1]->generateCode();
-                code.insert(code.end(), exprCode.begin(), exprCode.end());
+
+            code.push_back(Quadruple("FUNC_END", funcName, "", ""));
+            break;
+        }
+
+        case ASTNodeType::VAR_DECL:
+        {
+            string varName = children[0]->value; // å˜é‡å
+            if (children.size() > 1)
+            { // æœ‰åˆå§‹åŒ–å€¼
+                auto initCode = children[1]->generateCode();
+                code.insert(code.end(), initCode.begin(), initCode.end());
                 code.push_back(Quadruple("=", children[1]->result, "", varName));
-                break;
             }
-                
-            case ASTNodeType::IF_STMT: {
-                string labelElse = newLabel();
-                string labelEnd = newLabel();
-                
-                // Ìõ¼ş±í´ïÊ½µÄ´úÂë
-                auto condCode = children[0]->generateCode();
-                code.insert(code.end(), condCode.begin(), condCode.end());
-                
-                // Ìõ¼şÌø×ª
-                code.push_back(Quadruple("JZ", children[0]->result, "", labelElse));
-                
-                // if ·ÖÖ§µÄ´úÂë
-                auto ifCode = children[1]->generateCode();
-                code.insert(code.end(), ifCode.begin(), ifCode.end());
-                
-                if (children.size() > 2) {  // ÓĞ else ·ÖÖ§
-                    code.push_back(Quadruple("JMP", "", "", labelEnd));
-                    code.push_back(Quadruple("LABEL", "", "", labelElse));
-                    auto elseCode = children[2]->generateCode();
-                    code.insert(code.end(), elseCode.begin(), elseCode.end());
-                    code.push_back(Quadruple("LABEL", "", "", labelEnd));
-                } else {
-                    code.push_back(Quadruple("LABEL", "", "", labelElse));
-                }
-                break;
-            }
-                
-            case ASTNodeType::WHILE_STMT: {
-                string labelStart = newLabel();
-                string labelEnd = newLabel();
-                
-                code.push_back(Quadruple("LABEL", "", "", labelStart));
-                
-                // Ìõ¼ş±í´ïÊ½µÄ´úÂë
-                auto condCode = children[0]->generateCode();
-                code.insert(code.end(), condCode.begin(), condCode.end());
-                
-                // Ìõ¼şÌø×ª
-                code.push_back(Quadruple("JZ", children[0]->result, "", labelEnd));
-                
-                // Ñ­»·ÌåµÄ´úÂë
-                auto bodyCode = children[1]->generateCode();
-                code.insert(code.end(), bodyCode.begin(), bodyCode.end());
-                
-                code.push_back(Quadruple("JMP", "", "", labelStart));
+            break;
+        }
+
+        case ASTNodeType::ASSIGN_STMT:
+        {
+            string varName = children[0]->value;
+            auto exprCode = children[1]->generateCode();
+            code.insert(code.end(), exprCode.begin(), exprCode.end());
+            code.push_back(Quadruple("=", children[1]->result, "", varName));
+            break;
+        }
+
+        case ASTNodeType::IF_STMT:
+        {
+            string labelElse = newLabel();
+            string labelEnd = newLabel();
+
+            // æ¡ä»¶è¡¨è¾¾å¼çš„ä»£ç 
+            auto condCode = children[0]->generateCode();
+            code.insert(code.end(), condCode.begin(), condCode.end());
+
+            // æ¡ä»¶è·³è½¬
+            code.push_back(Quadruple("JZ", children[0]->result, "", labelElse));
+
+            // if åˆ†æ”¯çš„ä»£ç 
+            auto ifCode = children[1]->generateCode();
+            code.insert(code.end(), ifCode.begin(), ifCode.end());
+
+            if (children.size() > 2)
+            { // æœ‰ else åˆ†æ”¯
+                code.push_back(Quadruple("JMP", "", "", labelEnd));
+                code.push_back(Quadruple("LABEL", "", "", labelElse));
+                auto elseCode = children[2]->generateCode();
+                code.insert(code.end(), elseCode.begin(), elseCode.end());
                 code.push_back(Quadruple("LABEL", "", "", labelEnd));
-                break;
             }
-                
-            case ASTNodeType::BINARY_EXPR: {
-                auto leftCode = children[0]->generateCode();
-                auto rightCode = children[1]->generateCode();
-                
-                code.insert(code.end(), leftCode.begin(), leftCode.end());
-                code.insert(code.end(), rightCode.begin(), rightCode.end());
-                
-                result = newTemp();
-                code.push_back(Quadruple(value, children[0]->result, children[1]->result, result));
-                break;
+            else
+            {
+                code.push_back(Quadruple("LABEL", "", "", labelElse));
             }
-                
-            case ASTNodeType::UNARY_EXPR: {
+            break;
+        }
+
+        case ASTNodeType::WHILE_STMT:
+        {
+            string labelStart = newLabel();
+            string labelEnd = newLabel();
+
+            code.push_back(Quadruple("LABEL", "", "", labelStart));
+
+            // æ¡ä»¶è¡¨è¾¾å¼çš„ä»£ç 
+            auto condCode = children[0]->generateCode();
+            code.insert(code.end(), condCode.begin(), condCode.end());
+
+            // æ¡ä»¶è·³è½¬
+            code.push_back(Quadruple("JZ", children[0]->result, "", labelEnd));
+
+            // å¾ªç¯ä½“çš„ä»£ç 
+            auto bodyCode = children[1]->generateCode();
+            code.insert(code.end(), bodyCode.begin(), bodyCode.end());
+
+            code.push_back(Quadruple("JMP", "", "", labelStart));
+            code.push_back(Quadruple("LABEL", "", "", labelEnd));
+            break;
+        }
+
+        case ASTNodeType::BINARY_EXPR:
+        {
+            auto leftCode = children[0]->generateCode();
+            auto rightCode = children[1]->generateCode();
+
+            code.insert(code.end(), leftCode.begin(), leftCode.end());
+            code.insert(code.end(), rightCode.begin(), rightCode.end());
+
+            result = newTemp();
+            code.push_back(Quadruple(value, children[0]->result, children[1]->result, result));
+            break;
+        }
+
+        case ASTNodeType::UNARY_EXPR:
+        {
+            auto exprCode = children[0]->generateCode();
+            code.insert(code.end(), exprCode.begin(), exprCode.end());
+
+            result = newTemp();
+            code.push_back(Quadruple(value, children[0]->result, "", result));
+            break;
+        }
+
+        case ASTNodeType::IDENTIFIER:
+            result = value;
+            break;
+
+        case ASTNodeType::CONSTANT:
+            result = value;
+            break;
+
+        case ASTNodeType::RETURN_STMT:
+        {
+            if (!children.empty())
+            {
+                // æœ‰è¿”å›å€¼
                 auto exprCode = children[0]->generateCode();
                 code.insert(code.end(), exprCode.begin(), exprCode.end());
-                
-                result = newTemp();
-                code.push_back(Quadruple(value, children[0]->result, "", result));
-                break;
+                code.push_back(Quadruple("return", children[0]->result, "", ""));
             }
-                
-            case ASTNodeType::IDENTIFIER:
-                result = value;
-                break;
-                
-            case ASTNodeType::CONSTANT:
-                result = value;
-                break;
-                
-            case ASTNodeType::RETURN_STMT: {
-                if (!children.empty()) {
-                    // ÓĞ·µ»ØÖµ
-                    auto exprCode = children[0]->generateCode();
-                    code.insert(code.end(), exprCode.begin(), exprCode.end());
-                    code.push_back(Quadruple("return", children[0]->result, "", ""));
-                } else {
-                    // ÎŞ·µ»ØÖµ
-                    code.push_back(Quadruple("return", "", "", ""));
-                }
-                break;
+            else
+            {
+                // æ— è¿”å›å€¼
+                code.push_back(Quadruple("return", "", "", ""));
             }
-                
-            case ASTNodeType::COMPOUND_STMT: {
-                // ´¦Àí¸´ºÏÓï¾äÖĞµÄËùÓĞ×ÓÓï¾ä
-                for (auto child : children) {
-                    auto childCode = child->generateCode();
-                    code.insert(code.end(), childCode.begin(), childCode.end());
-                }
-                break;
-            }
+            break;
         }
-        
+
+        case ASTNodeType::COMPOUND_STMT:
+        {
+            // å¤„ç†å¤åˆè¯­å¥ä¸­çš„æ‰€æœ‰å­è¯­å¥
+            for (auto child : children)
+            {
+                auto childCode = child->generateCode();
+                code.insert(code.end(), childCode.begin(), childCode.end());
+            }
+            break;
+        }
+        }
+
         return code;
     }
-    
-    string result;  // ´æ´¢±í´ïÊ½µÄ½á¹û£¨ÁÙÊ±±äÁ¿Ãû»ò³£Á¿Öµ£©
+
+    string result; // å­˜å‚¨è¡¨è¾¾å¼çš„ç»“æœï¼ˆä¸´æ—¶å˜é‡åæˆ–å¸¸é‡å€¼ï¼‰
 
 private:
-    
-    void printTree(int level, ostream& out, bool isLast, vector<bool>& levels) {
-        // ´òÓ¡Ç°µ¼µÄÁ¬½ÓÏß
-        for (int i = 0; i < level - 1; i++) {
-            out << (levels[i] ? "    " : "©¦   ");
+    void printTree(int level, ostream &out, bool isLast, vector<bool> &levels)
+    {
+        // æ‰“å°å‰å¯¼çš„è¿æ¥çº¿
+        for (int i = 0; i < level - 1; i++)
+        {
+            out << (levels[i] ? "    " : "â”‚   ");
         }
-        
-        // ´òÓ¡µ±Ç°½ÚµãµÄÁ¬½ÓÏß
-        if (level > 0) {
-            out << (isLast ? "©¸©¤©¤ " : "©À©¤©¤ ");
+
+        // æ‰“å°å½“å‰èŠ‚ç‚¹çš„è¿æ¥çº¿
+        if (level > 0)
+        {
+            out << (isLast ? "â””â”€â”€ " : "â”œâ”€â”€ ");
         }
-        
-        // ´òÓ¡½ÚµãÄÚÈİ
+
+        // æ‰“å°èŠ‚ç‚¹å†…å®¹
         out << getNodeTypeName();
-        if (!value.empty()) {
+        if (!value.empty())
+        {
             out << " " << value;
         }
         out << endl;
-        
-        // ¼ÇÂ¼µ±Ç°²ã¼¶µÄ×´Ì¬
-        if (level >= levels.size()) {
+
+        // è®°å½•å½“å‰å±‚çº§çš„çŠ¶æ€
+        if (level >= levels.size())
+        {
             levels.push_back(!isLast);
-        } else {
+        }
+        else
+        {
             levels[level] = !isLast;
         }
-        
-        // µİ¹é´òÓ¡×Ó½Úµã
-        for (size_t i = 0; i < children.size(); i++) {
+
+        // é€’å½’æ‰“å°å­èŠ‚ç‚¹
+        for (size_t i = 0; i < children.size(); i++)
+        {
             children[i]->printTree(level + 1, out, i == children.size() - 1, levels);
         }
-        
-        // »Ö¸´µ±Ç°²ã¼¶µÄ×´Ì¬
-        if (level < levels.size()) {
+
+        // æ¢å¤å½“å‰å±‚çº§çš„çŠ¶æ€
+        if (level < levels.size())
+        {
             levels[level] = false;
         }
     }
-    
-    string getNodeTypeName() {
-        switch(type) {
-            case ASTNodeType::PROGRAM: return "³ÌĞò";
-            case ASTNodeType::FUNCTION_DECL: return "º¯ÊıÉùÃ÷";
-            case ASTNodeType::VAR_DECL: return "±äÁ¿ÉùÃ÷";
-            case ASTNodeType::COMPOUND_STMT: return "¸´ºÏÓï¾ä";
-            case ASTNodeType::ASSIGN_STMT: return "¸³ÖµÓï¾ä";
-            case ASTNodeType::IF_STMT: return "ifÓï¾ä";
-            case ASTNodeType::WHILE_STMT: return "whileÓï¾ä";
-            case ASTNodeType::RETURN_STMT: return "returnÓï¾ä";
-            case ASTNodeType::BINARY_EXPR: return "¶şÔª±í´ïÊ½";
-            case ASTNodeType::UNARY_EXPR: return "Ò»Ôª±í´ïÊ½";
-            case ASTNodeType::IDENTIFIER: return "±êÊ¶·û";
-            case ASTNodeType::CONSTANT: return "³£Á¿";
-            case ASTNodeType::EMPTY: return "¿ÕÓï¾ä";
-            default: return "Î´ÖªÀàĞÍ";
+
+    string getNodeTypeName()
+    {
+        switch (type)
+        {
+        case ASTNodeType::PROGRAM:
+            return "ç¨‹åº";
+        case ASTNodeType::FUNCTION_DECL:
+            return "å‡½æ•°å£°æ˜";
+        case ASTNodeType::VAR_DECL:
+            return "å˜é‡å£°æ˜";
+        case ASTNodeType::COMPOUND_STMT:
+            return "å¤åˆè¯­å¥";
+        case ASTNodeType::ASSIGN_STMT:
+            return "èµ‹å€¼è¯­å¥";
+        case ASTNodeType::IF_STMT:
+            return "ifè¯­å¥";
+        case ASTNodeType::WHILE_STMT:
+            return "whileè¯­å¥";
+        case ASTNodeType::RETURN_STMT:
+            return "returnè¯­å¥";
+        case ASTNodeType::BINARY_EXPR:
+            return "äºŒå…ƒè¡¨è¾¾å¼";
+        case ASTNodeType::UNARY_EXPR:
+            return "ä¸€å…ƒè¡¨è¾¾å¼";
+        case ASTNodeType::IDENTIFIER:
+            return "æ ‡è¯†ç¬¦";
+        case ASTNodeType::CONSTANT:
+            return "å¸¸é‡";
+        case ASTNodeType::EMPTY:
+            return "ç©ºè¯­å¥";
+        default:
+            return "æœªçŸ¥ç±»å‹";
         }
     }
 };
 
-// ³õÊ¼»¯¾²Ì¬³ÉÔ±
+// åˆå§‹åŒ–é™æ€æˆå‘˜
 int ASTNode::tempVarCount = 0;
 int ASTNode::labelCount = 0;
 
-// Óï·¨·ÖÎöÆ÷
-class Parser {
+// è¯­æ³•åˆ†æå™¨
+class Parser
+{
 private:
-    Lexer& lexer;
+    Lexer &lexer;
     Token currentToken;
-    
-    void advance() {
+
+    void advance()
+    {
         currentToken = lexer.getNextToken();
     }
-    
-    void eat(TokenCategory category) {
-        if (currentToken.type.category == category) {
+
+    void eat(TokenCategory category)
+    {
+        if (currentToken.type.category == category)
+        {
             advance();
-        } else {
-            string error = "Óï·¨´íÎó£ºÆÚÍû " + getCategoryName(category) + 
-                         "£¬µ«µÃµ½ " + getCategoryName(currentToken.type.category) +
-                         "£¬´ÊËØÎª£º" + currentToken.lexeme;  // Ìí¼Ó´ÊËØĞÅÏ¢ÒÔ±ãµ÷ÊÔ
+        }
+        else
+        {
+            string error = "è¯­æ³•é”™è¯¯ï¼šæœŸæœ› " + getCategoryName(category) +
+                           "ï¼Œä½†å¾—åˆ° " + getCategoryName(currentToken.type.category) +
+                           "ï¼Œè¯ç´ ä¸ºï¼š" + currentToken.lexeme; // æ·»åŠ è¯ç´ ä¿¡æ¯ä»¥ä¾¿è°ƒè¯•
             throw runtime_error(error);
         }
     }
 
 public:
-    Parser(Lexer& lex) : lexer(lex) {
-        advance();  // »ñÈ¡µÚÒ»¸ötoken
+    Parser(Lexer &lex) : lexer(lex)
+    {
+        advance(); // è·å–ç¬¬ä¸€ä¸ªtoken
     }
-    
-    // ½âÎö³ÌĞò
-    ASTNode* parse() {
+
+    // è§£æç¨‹åº
+    ASTNode *parse()
+    {
         return program();
     }
-    
-    // ³ÌĞò -> º¯ÊıÉùÃ÷ÁĞ±í
-    ASTNode* program() {
-        ASTNode* node = new ASTNode(ASTNodeType::PROGRAM);
-        while (currentToken.type.name != "EOF") {
+
+    // ç¨‹åº -> å‡½æ•°å£°æ˜åˆ—è¡¨
+    ASTNode *program()
+    {
+        ASTNode *node = new ASTNode(ASTNodeType::PROGRAM);
+        while (currentToken.type.name != "EOF")
+        {
             node->addChild(functionDecl());
         }
         return node;
     }
-    
-    // º¯ÊıÉùÃ÷ -> ÀàĞÍ ±êÊ¶·û '(' ²ÎÊıÁĞ±í? ')' ¸´ºÏÓï¾ä
-    ASTNode* functionDecl() {
-        ASTNode* node = new ASTNode(ASTNodeType::FUNCTION_DECL);
-        
-        // ½âÎö·µ»ØÀàĞÍ
-        if (currentToken.type.category == KEYWORD) {
-            node->value = currentToken.lexeme;  // ±£´æ·µ»ØÀàĞÍ
+
+    // å‡½æ•°å£°æ˜ -> ç±»å‹ æ ‡è¯†ç¬¦ '(' å‚æ•°åˆ—è¡¨? ')' å¤åˆè¯­å¥
+    ASTNode *functionDecl()
+    {
+        ASTNode *node = new ASTNode(ASTNodeType::FUNCTION_DECL);
+
+        // è§£æè¿”å›ç±»å‹
+        if (currentToken.type.category == KEYWORD)
+        {
+            node->value = currentToken.lexeme; // ä¿å­˜è¿”å›ç±»å‹
             advance();
-        } else {
-            throw runtime_error("ÆÚÍûº¯Êı·µ»ØÀàĞÍ");
         }
-        
-        // ½âÎöº¯ÊıÃû
-        if (currentToken.type.category == IDENTIFIER || 
-            (currentToken.type.category == KEYWORD && currentToken.lexeme == "main")) {  // ÌØÊâ´¦Àímain
-            ASTNode* funcName = new ASTNode(ASTNodeType::IDENTIFIER, currentToken.lexeme);
+        else
+        {
+            throw runtime_error("æœŸæœ›å‡½æ•°è¿”å›ç±»å‹");
+        }
+
+        // è§£æå‡½æ•°å
+        if (currentToken.type.category == IDENTIFIER ||
+            (currentToken.type.category == KEYWORD && currentToken.lexeme == "main"))
+        { // ç‰¹æ®Šå¤„ç†main
+            ASTNode *funcName = new ASTNode(ASTNodeType::IDENTIFIER, currentToken.lexeme);
             node->addChild(funcName);
             advance();
-        } else {
-            throw runtime_error("ÆÚÍûº¯ÊıÃû");
         }
-        
-        // ½âÎö²ÎÊıÁĞ±í
-        if (currentToken.lexeme != "(") {
-            throw runtime_error("ÆÚÍû'('");
+        else
+        {
+            throw runtime_error("æœŸæœ›å‡½æ•°å");
         }
-        advance();  // ³Ôµô '('
-        
-        // TODO: ½âÎö²ÎÊıÁĞ±í
-        
-        if (currentToken.lexeme != ")") {
-            throw runtime_error("ÆÚÍû')'");
+
+        // è§£æå‚æ•°åˆ—è¡¨
+        if (currentToken.lexeme != "(")
+        {
+            throw runtime_error("æœŸæœ›'('");
         }
-        advance();  // ³Ôµô ')'
-        
-        // ½âÎöº¯ÊıÌå
+        advance(); // åƒæ‰ '('
+
+        // TODO: è§£æå‚æ•°åˆ—è¡¨
+
+        if (currentToken.lexeme != ")")
+        {
+            throw runtime_error("æœŸæœ›')'");
+        }
+        advance(); // åƒæ‰ ')'
+
+        // è§£æå‡½æ•°ä½“
         node->addChild(compoundStmt());
-        
+
         return node;
     }
-    
-    // ¸´ºÏÓï¾ä -> '{' Óï¾äÁĞ±í '}'
-    ASTNode* compoundStmt() {
-        ASTNode* node = new ASTNode(ASTNodeType::COMPOUND_STMT);
-        
-        eat(DELIMITER);  // ³Ôµô '{'
-        
-        // ½âÎöÓï¾äÁĞ±í
-        while (currentToken.lexeme != "}") {
+
+    // å¤åˆè¯­å¥ -> '{' è¯­å¥åˆ—è¡¨ '}'
+    ASTNode *compoundStmt()
+    {
+        ASTNode *node = new ASTNode(ASTNodeType::COMPOUND_STMT);
+
+        eat(DELIMITER); // åƒæ‰ '{'
+
+        // è§£æè¯­å¥åˆ—è¡¨
+        while (currentToken.lexeme != "}")
+        {
             node->addChild(statement());
         }
-        
-        eat(DELIMITER);  // ³Ôµô '}'
-        
+
+        eat(DELIMITER); // åƒæ‰ '}'
+
         return node;
     }
-    
-    // Óï¾ä
-    ASTNode* statement() {
-        switch (currentToken.type.category) {
-            case KEYWORD:
-                if (currentToken.lexeme == "if") return ifStmt();
-                if (currentToken.lexeme == "while") return whileStmt();
-                if (currentToken.lexeme == "return") return returnStmt();
-                if (currentToken.lexeme == "int") return varDecl();
-                break;
-            case IDENTIFIER:
-                return assignStmt();
-            default:
-                return empty();
+
+    // è¯­å¥
+    ASTNode *statement()
+    {
+        switch (currentToken.type.category)
+        {
+        case KEYWORD:
+            if (currentToken.lexeme == "if")
+                return ifStmt();
+            if (currentToken.lexeme == "while")
+                return whileStmt();
+            if (currentToken.lexeme == "return")
+                return returnStmt();
+            if (currentToken.lexeme == "int")
+                return varDecl();
+            break;
+        case IDENTIFIER:
+            return assignStmt();
+        default:
+            return empty();
         }
-        throw runtime_error("Î´ÖªµÄÓï¾äÀàĞÍ");
+        throw runtime_error("æœªçŸ¥çš„è¯­å¥ç±»å‹");
     }
-    
-    // ±äÁ¿ÉùÃ÷ -> ÀàĞÍ ±êÊ¶·û ('=' ±í´ïÊ½)? ';'
-    ASTNode* varDecl() {
-        ASTNode* node = new ASTNode(ASTNodeType::VAR_DECL);
-        
-        // ±£´æÀàĞÍ
-        node->value = currentToken.lexeme;  // int
+
+    // å˜é‡å£°æ˜ -> ç±»å‹ æ ‡è¯†ç¬¦ ('=' è¡¨è¾¾å¼)? ';'
+    ASTNode *varDecl()
+    {
+        ASTNode *node = new ASTNode(ASTNodeType::VAR_DECL);
+
+        // ä¿å­˜ç±»å‹
+        node->value = currentToken.lexeme; // int
         advance();
-        
-        // ±£´æ±äÁ¿Ãû
-        if (currentToken.type.category == IDENTIFIER) {
-            ASTNode* varName = new ASTNode(ASTNodeType::IDENTIFIER, currentToken.lexeme);
+
+        // ä¿å­˜å˜é‡å
+        if (currentToken.type.category == IDENTIFIER)
+        {
+            ASTNode *varName = new ASTNode(ASTNodeType::IDENTIFIER, currentToken.lexeme);
             node->addChild(varName);
             advance();
         }
-        
-        // Èç¹ûÓĞ³õÊ¼»¯
-        if (currentToken.lexeme == "=") {
-            advance();  // ³Ôµô =
+
+        // å¦‚æœæœ‰åˆå§‹åŒ–
+        if (currentToken.lexeme == "=")
+        {
+            advance(); // åƒæ‰ =
             node->addChild(expression());
         }
-        
-        eat(DELIMITER);  // ³Ôµô ;
+
+        eat(DELIMITER); // åƒæ‰ ;
         return node;
     }
-    
-    // ¸³ÖµÓï¾ä -> ±êÊ¶·û '=' ±í´ïÊ½ ';'
-    ASTNode* assignStmt() {
-        ASTNode* node = new ASTNode(ASTNodeType::ASSIGN_STMT);
-        
-        // ±£´æ±äÁ¿Ãû
-        ASTNode* varName = new ASTNode(ASTNodeType::IDENTIFIER, currentToken.lexeme);
+
+    // èµ‹å€¼è¯­å¥ -> æ ‡è¯†ç¬¦ '=' è¡¨è¾¾å¼ ';'
+    ASTNode *assignStmt()
+    {
+        ASTNode *node = new ASTNode(ASTNodeType::ASSIGN_STMT);
+
+        // ä¿å­˜å˜é‡å
+        ASTNode *varName = new ASTNode(ASTNodeType::IDENTIFIER, currentToken.lexeme);
         node->addChild(varName);
         advance();
-        
-        eat(OPERATOR);  // ³Ôµô =
+
+        eat(OPERATOR); // åƒæ‰ =
         node->addChild(expression());
-        eat(DELIMITER);  // ³Ôµô ;
-        
+        eat(DELIMITER); // åƒæ‰ ;
+
         return node;
     }
-    
-    // ifÓï¾ä -> 'if' '(' ±í´ïÊ½ ')' ¸´ºÏÓï¾ä ('else' ¸´ºÏÓï¾ä)?
-    ASTNode* ifStmt() {
-        ASTNode* node = new ASTNode(ASTNodeType::IF_STMT);
-        
-        advance();  // ³Ôµô if
-        eat(DELIMITER);  // ³Ôµô (
-        node->addChild(expression());  // Ìõ¼ş±í´ïÊ½
-        eat(DELIMITER);  // ³Ôµô )
-        
-        node->addChild(compoundStmt());  // if ·ÖÖ§
-        
-        // ´¦Àí else ·ÖÖ§
-        if (currentToken.lexeme == "else") {
-            advance();  // ³Ôµô else
+
+    // ifè¯­å¥ -> 'if' '(' è¡¨è¾¾å¼ ')' å¤åˆè¯­å¥ ('else' å¤åˆè¯­å¥)?
+    ASTNode *ifStmt()
+    {
+        ASTNode *node = new ASTNode(ASTNodeType::IF_STMT);
+
+        advance();                    // åƒæ‰ if
+        eat(DELIMITER);               // åƒæ‰ (
+        node->addChild(expression()); // æ¡ä»¶è¡¨è¾¾å¼
+        eat(DELIMITER);               // åƒæ‰ )
+
+        node->addChild(compoundStmt()); // if åˆ†æ”¯
+
+        // å¤„ç† else åˆ†æ”¯
+        if (currentToken.lexeme == "else")
+        {
+            advance(); // åƒæ‰ else
             node->addChild(compoundStmt());
         }
-        
+
         return node;
     }
-    
-    // whileÓï¾ä -> 'while' '(' ±í´ïÊ½ ')' ¸´ºÏÓï¾ä
-    ASTNode* whileStmt() {
-        ASTNode* node = new ASTNode(ASTNodeType::WHILE_STMT);
-        
-        advance();  // ³Ôµô while
-        eat(DELIMITER);  // ³Ôµô (
-        node->addChild(expression());  // Ìõ¼ş±í´ïÊ½
-        eat(DELIMITER);  // ³Ôµô )
-        
-        node->addChild(compoundStmt());  // Ñ­»·Ìå
-        
+
+    // whileè¯­å¥ -> 'while' '(' è¡¨è¾¾å¼ ')' å¤åˆè¯­å¥
+    ASTNode *whileStmt()
+    {
+        ASTNode *node = new ASTNode(ASTNodeType::WHILE_STMT);
+
+        advance();                    // åƒæ‰ while
+        eat(DELIMITER);               // åƒæ‰ (
+        node->addChild(expression()); // æ¡ä»¶è¡¨è¾¾å¼
+        eat(DELIMITER);               // åƒæ‰ )
+
+        node->addChild(compoundStmt()); // å¾ªç¯ä½“
+
         return node;
     }
-    
-    // returnÓï¾ä -> 'return' ±í´ïÊ½? ';'
-    ASTNode* returnStmt() {
-        ASTNode* node = new ASTNode(ASTNodeType::RETURN_STMT);
-        
-        advance();  // ³Ôµô return
-        
-        // Èç¹û²»ÊÇ·ÖºÅ£¬ËµÃ÷ÓĞ·µ»ØÖµ
-        if (currentToken.lexeme != ";") {
+
+    // returnè¯­å¥ -> 'return' è¡¨è¾¾å¼? ';'
+    ASTNode *returnStmt()
+    {
+        ASTNode *node = new ASTNode(ASTNodeType::RETURN_STMT);
+
+        advance(); // åƒæ‰ return
+
+        // å¦‚æœä¸æ˜¯åˆ†å·ï¼Œè¯´æ˜æœ‰è¿”å›å€¼
+        if (currentToken.lexeme != ";")
+        {
             node->addChild(expression());
         }
-        
-        eat(DELIMITER);  // ³Ôµô ;
+
+        eat(DELIMITER); // åƒæ‰ ;
         return node;
     }
-    
-    // ±í´ïÊ½
-    ASTNode* expression() {
-        return logicalOr();  // ´Ó×îµÍÓÅÏÈ¼¶µÄÔËËã¿ªÊ¼
+
+    // è¡¨è¾¾å¼
+    ASTNode *expression()
+    {
+        return logicalOr(); // ä»æœ€ä½ä¼˜å…ˆçº§çš„è¿ç®—å¼€å§‹
     }
-    
-    // Âß¼­»ò±í´ïÊ½
-    ASTNode* logicalOr() {
-        ASTNode* node = logicalAnd();
-        
-        while (currentToken.lexeme == "||") {
+
+    // é€»è¾‘æˆ–è¡¨è¾¾å¼
+    ASTNode *logicalOr()
+    {
+        ASTNode *node = logicalAnd();
+
+        while (currentToken.lexeme == "||")
+        {
             string op = currentToken.lexeme;
-            advance();  // ³ÔµôÔËËã·û
-            
-            ASTNode* newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
+            advance(); // åƒæ‰è¿ç®—ç¬¦
+
+            ASTNode *newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
             newNode->addChild(node);
             newNode->addChild(logicalAnd());
             node = newNode;
         }
-        
+
         return node;
     }
-    
-    // Âß¼­Óë±í´ïÊ½
-    ASTNode* logicalAnd() {
-        ASTNode* node = equality();
-        
-        while (currentToken.lexeme == "&&") {
+
+    // é€»è¾‘ä¸è¡¨è¾¾å¼
+    ASTNode *logicalAnd()
+    {
+        ASTNode *node = equality();
+
+        while (currentToken.lexeme == "&&")
+        {
             string op = currentToken.lexeme;
-            advance();  // ³ÔµôÔËËã·û
-            
-            ASTNode* newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
+            advance(); // åƒæ‰è¿ç®—ç¬¦
+
+            ASTNode *newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
             newNode->addChild(node);
             newNode->addChild(equality());
             node = newNode;
         }
-        
+
         return node;
     }
-    
-    // ÏàµÈĞÔ±í´ïÊ½
-    ASTNode* equality() {
-        ASTNode* node = relational();
-        
-        while (currentToken.lexeme == "==" || currentToken.lexeme == "!=") {
+
+    // ç›¸ç­‰æ€§è¡¨è¾¾å¼
+    ASTNode *equality()
+    {
+        ASTNode *node = relational();
+
+        while (currentToken.lexeme == "==" || currentToken.lexeme == "!=")
+        {
             string op = currentToken.lexeme;
-            advance();  // ³ÔµôÔËËã·û
-            
-            ASTNode* newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
+            advance(); // åƒæ‰è¿ç®—ç¬¦
+
+            ASTNode *newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
             newNode->addChild(node);
             newNode->addChild(relational());
             node = newNode;
         }
-        
+
         return node;
     }
-    
-    // ¹ØÏµ±í´ïÊ½
-    ASTNode* relational() {
-        ASTNode* node = additive();
-        
+
+    // å…³ç³»è¡¨è¾¾å¼
+    ASTNode *relational()
+    {
+        ASTNode *node = additive();
+
         while (currentToken.lexeme == "<" || currentToken.lexeme == ">" ||
-               currentToken.lexeme == "<=" || currentToken.lexeme == ">=") {
+               currentToken.lexeme == "<=" || currentToken.lexeme == ">=")
+        {
             string op = currentToken.lexeme;
-            advance();  // ³ÔµôÔËËã·û
-            
-            ASTNode* newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
+            advance(); // åƒæ‰è¿ç®—ç¬¦
+
+            ASTNode *newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
             newNode->addChild(node);
             newNode->addChild(additive());
             node = newNode;
         }
-        
+
         return node;
     }
-    
-    // ¼Ó·¨±í´ïÊ½
-    ASTNode* additive() {
-        ASTNode* node = multiplicative();
-        
-        while (currentToken.lexeme == "+" || currentToken.lexeme == "-") {
+
+    // åŠ æ³•è¡¨è¾¾å¼
+    ASTNode *additive()
+    {
+        ASTNode *node = multiplicative();
+
+        while (currentToken.lexeme == "+" || currentToken.lexeme == "-")
+        {
             string op = currentToken.lexeme;
-            advance();  // ³ÔµôÔËËã·û
-            
-            ASTNode* newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
+            advance(); // åƒæ‰è¿ç®—ç¬¦
+
+            ASTNode *newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
             newNode->addChild(node);
             newNode->addChild(multiplicative());
             node = newNode;
         }
-        
+
         return node;
     }
-    
-    // ³Ë·¨±í´ïÊ½
-    ASTNode* multiplicative() {
-        ASTNode* node = unary();
-        
-        while (currentToken.lexeme == "*" || currentToken.lexeme == "/" || 
-               currentToken.lexeme == "%") {
+
+    // ä¹˜æ³•è¡¨è¾¾å¼
+    ASTNode *multiplicative()
+    {
+        ASTNode *node = unary();
+
+        while (currentToken.lexeme == "*" || currentToken.lexeme == "/" ||
+               currentToken.lexeme == "%")
+        {
             string op = currentToken.lexeme;
-            advance();  // ³ÔµôÔËËã·û
-            
-            ASTNode* newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
+            advance(); // åƒæ‰è¿ç®—ç¬¦
+
+            ASTNode *newNode = new ASTNode(ASTNodeType::BINARY_EXPR, op);
             newNode->addChild(node);
             newNode->addChild(unary());
             node = newNode;
         }
-        
+
         return node;
     }
-    
-    // Ò»Ôª±í´ïÊ½
-    ASTNode* unary() {
-        if (currentToken.lexeme == "+" || currentToken.lexeme == "-" || 
-            currentToken.lexeme == "!") {
+
+    // ä¸€å…ƒè¡¨è¾¾å¼
+    ASTNode *unary()
+    {
+        if (currentToken.lexeme == "+" || currentToken.lexeme == "-" ||
+            currentToken.lexeme == "!")
+        {
             string op = currentToken.lexeme;
-            advance();  // ³ÔµôÔËËã·û
-            
-            ASTNode* node = new ASTNode(ASTNodeType::UNARY_EXPR, op);
+            advance(); // åƒæ‰è¿ç®—ç¬¦
+
+            ASTNode *node = new ASTNode(ASTNodeType::UNARY_EXPR, op);
             node->addChild(unary());
             return node;
         }
-        
+
         return primary();
     }
-    
-    // »ù±¾±í´ïÊ½
-    ASTNode* primary() {
+
+    // åŸºæœ¬è¡¨è¾¾å¼
+    ASTNode *primary()
+    {
         Token token = currentToken;
-        if (token.type.category == CONSTANT) {
+        if (token.type.category == CONSTANT)
+        {
             advance();
             return new ASTNode(ASTNodeType::CONSTANT, token.lexeme);
         }
-        
-        if (token.type.category == IDENTIFIER) {
+
+        if (token.type.category == IDENTIFIER)
+        {
             advance();
             return new ASTNode(ASTNodeType::IDENTIFIER, token.lexeme);
         }
-        
-        if (token.lexeme == "(") {
-            advance();  // ³Ôµô (
-            ASTNode* node = expression();
-            eat(DELIMITER);  // ³Ôµô )
+
+        if (token.lexeme == "(")
+        {
+            advance(); // åƒæ‰ (
+            ASTNode *node = expression();
+            eat(DELIMITER); // åƒæ‰ )
             return node;
         }
-        
-        throw runtime_error("ÒâÍâµÄtoken: " + token.lexeme);
+
+        throw runtime_error("æ„å¤–çš„token: " + token.lexeme);
     }
-    
-    // ¿ÕÓï¾ä
-    ASTNode* empty() {
+
+    // ç©ºè¯­å¥
+    ASTNode *empty()
+    {
         return new ASTNode(ASTNodeType::EMPTY);
     }
 };
 
-// ÔÚ Quadruple ½á¹¹ÌåºóÌí¼ÓÓÅ»¯Æ÷Àà
-class CodeOptimizer {
+// åœ¨ Quadruple ç»“æ„ä½“åæ·»åŠ ä¼˜åŒ–å™¨ç±»
+class CodeOptimizer
+{
 private:
-    vector<Quadruple>& code;
-    
-    // ÅĞ¶ÏÊÇ·ñÊÇÊı×Ö
-    bool isNumber(const string& str) {
-        return !str.empty() && 
-               find_if(str.begin(), str.end(), 
-                      [](char c) { return !isdigit(c) && c != '-'; }) == str.end();
+    vector<Quadruple> &code;
+
+    // åˆ¤æ–­æ˜¯å¦æ˜¯æ•°å­—
+    bool isNumber(const string &str)
+    {
+        return !str.empty() &&
+               find_if(str.begin(), str.end(),
+                       [](char c)
+                       { return !isdigit(c) && c != '-'; }) == str.end();
     }
-    
-    // ¼ÆËã³£Á¿±í´ïÊ½
-    string evaluateConstant(const string& op, const string& arg1, const string& arg2) {
-        if (!isNumber(arg1) || !isNumber(arg2)) return "";
-        
+
+    // è®¡ç®—å¸¸é‡è¡¨è¾¾å¼
+    string evaluateConstant(const string &op, const string &arg1, const string &arg2)
+    {
+        if (!isNumber(arg1) || !isNumber(arg2))
+            return "";
+
         int num1 = stoi(arg1);
         int num2 = stoi(arg2);
         int result = 0;
-        
-        if (op == "+") result = num1 + num2;
-        else if (op == "-") result = num1 - num2;
-        else if (op == "*") result = num1 * num2;
-        else if (op == "/") result = num2 != 0 ? num1 / num2 : 0;
-        else if (op == "%") result = num2 != 0 ? num1 % num2 : 0;
-        else if (op == "<") result = num1 < num2;
-        else if (op == ">") result = num1 > num2;
-        else if (op == "<=") result = num1 <= num2;
-        else if (op == ">=") result = num1 >= num2;
-        else if (op == "==") result = num1 == num2;
-        else if (op == "!=") result = num1 != num2;
-        else return "";
-        
+
+        if (op == "+")
+            result = num1 + num2;
+        else if (op == "-")
+            result = num1 - num2;
+        else if (op == "*")
+            result = num1 * num2;
+        else if (op == "/")
+            result = num2 != 0 ? num1 / num2 : 0;
+        else if (op == "%")
+            result = num2 != 0 ? num1 % num2 : 0;
+        else if (op == "<")
+            result = num1 < num2;
+        else if (op == ">")
+            result = num1 > num2;
+        else if (op == "<=")
+            result = num1 <= num2;
+        else if (op == ">=")
+            result = num1 >= num2;
+        else if (op == "==")
+            result = num1 == num2;
+        else if (op == "!=")
+            result = num1 != num2;
+        else
+            return "";
+
         return to_string(result);
     }
-    
-    // ¼ì²é±äÁ¿ÊÇ·ñÔÚºóĞø±»Ê¹ÓÃ
-    bool isVariableUsed(const string& var, size_t start) {
-        // ¼ì²é±äÁ¿ÃûÊÇ·ñÊÇÁÙÊ±±äÁ¿
-        if (var[0] == 't') {
-            for (size_t i = start + 1; i < code.size(); i++) {
-                if (code[i].arg1 == var || code[i].arg2 == var) return true;
+
+    // æ£€æŸ¥å˜é‡æ˜¯å¦åœ¨åç»­è¢«ä½¿ç”¨
+    bool isVariableUsed(const string &var, size_t start)
+    {
+        // æ£€æŸ¥å˜é‡åæ˜¯å¦æ˜¯ä¸´æ—¶å˜é‡
+        if (var[0] == 't')
+        {
+            for (size_t i = start + 1; i < code.size(); i++)
+            {
+                if (code[i].arg1 == var || code[i].arg2 == var)
+                    return true;
             }
-        } else {
-            // ·ÇÁÙÊ±±äÁ¿£¨Èç a, b, c£©Ó¦¸Ã±£Áô
+        }
+        else
+        {
+            // éä¸´æ—¶å˜é‡ï¼ˆå¦‚ a, b, cï¼‰åº”è¯¥ä¿ç•™
             return true;
         }
         return false;
     }
-    
-    // »ñÈ¡±äÁ¿µÄµ±Ç°Öµ
-    string getCurrentValue(const string& var, size_t pos) {
-        for (int i = pos - 1; i >= 0; i--) {
-            if (code[i].result == var && code[i].op == "=") {
+
+    // è·å–å˜é‡çš„å½“å‰å€¼
+    string getCurrentValue(const string &var, size_t pos)
+    {
+        for (int i = pos - 1; i >= 0; i--)
+        {
+            if (code[i].result == var && code[i].op == "=")
+            {
                 return code[i].arg1;
             }
         }
@@ -909,12 +1092,14 @@ private:
     }
 
 public:
-    CodeOptimizer(vector<Quadruple>& intermediateCode) : code(intermediateCode) {}
-    
-    // Ö´ĞĞËùÓĞÓÅ»¯
-    void optimize() {
+    CodeOptimizer(vector<Quadruple> &intermediateCode) : code(intermediateCode) {}
+
+    // æ‰§è¡Œæ‰€æœ‰ä¼˜åŒ–
+    void optimize()
+    {
         bool changed;
-        do {
+        do
+        {
             changed = false;
             changed |= constantFolding();
             changed |= deadCodeElimination();
@@ -922,49 +1107,59 @@ public:
             changed |= copyPropagation();
         } while (changed);
     }
-    
-    // ³£Á¿ÕÛµş
-    bool constantFolding() {
+
+    // å¸¸é‡æŠ˜å 
+    bool constantFolding()
+    {
         bool changed = false;
-        map<string, string> constants;  // ´æ´¢ÒÑÖªµÄ³£Á¿Öµ
-        
-        // µÚÒ»±é£ºÊÕ¼¯ËùÓĞ³£Á¿¸³Öµ
-        for (const auto& quad : code) {
-            if (quad.op == "=" && isNumber(quad.arg1)) {
+        map<string, string> constants; // å­˜å‚¨å·²çŸ¥çš„å¸¸é‡å€¼
+
+        // ç¬¬ä¸€éï¼šæ”¶é›†æ‰€æœ‰å¸¸é‡èµ‹å€¼
+        for (const auto &quad : code)
+        {
+            if (quad.op == "=" && isNumber(quad.arg1))
+            {
                 constants[quad.result] = quad.arg1;
             }
         }
-        
-        // µÚ¶ş±é£º½øĞĞ³£Á¿ÕÛµş
-        for (size_t i = 0; i < code.size(); i++) {
-            // Ìø¹ı¿ØÖÆÁ÷Ïà¹ØµÄÖ¸Áî
-            if (code[i].op == "FUNC_BEGIN" || code[i].op == "FUNC_END" || 
+
+        // ç¬¬äºŒéï¼šè¿›è¡Œå¸¸é‡æŠ˜å 
+        for (size_t i = 0; i < code.size(); i++)
+        {
+            // è·³è¿‡æ§åˆ¶æµç›¸å…³çš„æŒ‡ä»¤
+            if (code[i].op == "FUNC_BEGIN" || code[i].op == "FUNC_END" ||
                 code[i].op == "LABEL" || code[i].op == "JMP" || code[i].op == "JZ" ||
-                code[i].op == "return") {
+                code[i].op == "return")
+            {
                 continue;
             }
-            
-            // ¶ÔÓÚ±È½ÏÔËËã£¬²»½øĞĞ³£Á¿ÕÛµş
-            if (code[i].op == "<" || code[i].op == ">" || code[i].op == "<=" || 
-                code[i].op == ">=" || code[i].op == "==" || code[i].op == "!=") {
+
+            // å¯¹äºæ¯”è¾ƒè¿ç®—ï¼Œä¸è¿›è¡Œå¸¸é‡æŠ˜å 
+            if (code[i].op == "<" || code[i].op == ">" || code[i].op == "<=" ||
+                code[i].op == ">=" || code[i].op == "==" || code[i].op == "!=")
+            {
                 continue;
             }
-            
+
             string arg1 = code[i].arg1;
             string arg2 = code[i].arg2;
-            
-            // Ìæ»»ÒÑÖª³£Á¿
-            if (constants.find(arg1) != constants.end()) {
+
+            // æ›¿æ¢å·²çŸ¥å¸¸é‡
+            if (constants.find(arg1) != constants.end())
+            {
                 arg1 = constants[arg1];
             }
-            if (constants.find(arg2) != constants.end()) {
+            if (constants.find(arg2) != constants.end())
+            {
                 arg2 = constants[arg2];
             }
-            
-            // ³¢ÊÔ¼ÆËã½á¹û
-            if (isNumber(arg1) && (arg2.empty() || isNumber(arg2))) {
+
+            // å°è¯•è®¡ç®—ç»“æœ
+            if (isNumber(arg1) && (arg2.empty() || isNumber(arg2)))
+            {
                 string result = evaluateConstant(code[i].op, arg1, arg2);
-                if (!result.empty()) {
+                if (!result.empty())
+                {
                     code[i].op = "=";
                     code[i].arg1 = result;
                     code[i].arg2 = "";
@@ -975,89 +1170,110 @@ public:
         }
         return changed;
     }
-    
-    // ËÀ´úÂëÏû³ı
-    bool deadCodeElimination() {
+
+    // æ­»ä»£ç æ¶ˆé™¤
+    bool deadCodeElimination()
+    {
         bool changed = false;
         vector<Quadruple> newCode;
-        
-        for (size_t i = 0; i < code.size(); i++) {
-            // ±£ÁôËùÓĞ±êÇ©¡¢Ìø×ªºÍº¯ÊıÏà¹ØµÄËÄÔªÊ½
+
+        for (size_t i = 0; i < code.size(); i++)
+        {
+            // ä¿ç•™æ‰€æœ‰æ ‡ç­¾ã€è·³è½¬å’Œå‡½æ•°ç›¸å…³çš„å››å…ƒå¼
             if (code[i].op == "LABEL" || code[i].op == "JMP" || code[i].op == "JZ" ||
-                code[i].op == "FUNC_BEGIN" || code[i].op == "FUNC_END" || 
-                code[i].op == "return") {
+                code[i].op == "FUNC_BEGIN" || code[i].op == "FUNC_END" ||
+                code[i].op == "return")
+            {
                 newCode.push_back(code[i]);
                 continue;
             }
-            
-            // ¼ì²é½á¹ûÊÇ·ñ±»Ê¹ÓÃ
-            if (!code[i].result.empty() && !isVariableUsed(code[i].result, i)) {
+
+            // æ£€æŸ¥ç»“æœæ˜¯å¦è¢«ä½¿ç”¨
+            if (!code[i].result.empty() && !isVariableUsed(code[i].result, i))
+            {
                 changed = true;
                 continue;
             }
-            
+
             newCode.push_back(code[i]);
         }
-        
-        if (changed) {
+
+        if (changed)
+        {
             code = newCode;
         }
         return changed;
     }
-    
-    // ¹«¹²×Ó±í´ïÊ½Ïû³ı
-    bool commonSubexpressionElimination() {
+
+    // å…¬å…±å­è¡¨è¾¾å¼æ¶ˆé™¤
+    bool commonSubexpressionElimination()
+    {
         bool changed = false;
         map<string, string> expressions;
-        
-        for (size_t i = 0; i < code.size(); i++) {
-            if (code[i].op != "=" && code[i].op != "LABEL" && code[i].op != "JMP" && 
-                code[i].op != "JZ" && code[i].op != "FUNC_BEGIN" && code[i].op != "FUNC_END") {
+
+        for (size_t i = 0; i < code.size(); i++)
+        {
+            if (code[i].op != "=" && code[i].op != "LABEL" && code[i].op != "JMP" &&
+                code[i].op != "JZ" && code[i].op != "FUNC_BEGIN" && code[i].op != "FUNC_END")
+            {
                 string expr = code[i].op + "," + code[i].arg1 + "," + code[i].arg2;
-                
-                if (expressions.find(expr) != expressions.end()) {
-                    // ÕÒµ½¹«¹²×Ó±í´ïÊ½
+
+                if (expressions.find(expr) != expressions.end())
+                {
+                    // æ‰¾åˆ°å…¬å…±å­è¡¨è¾¾å¼
                     code[i].op = "=";
                     code[i].arg1 = expressions[expr];
                     code[i].arg2 = "";
                     changed = true;
-                } else {
+                }
+                else
+                {
                     expressions[expr] = code[i].result;
                 }
             }
         }
         return changed;
     }
-    
-    // ¸´ÖÆ´«²¥
-    bool copyPropagation() {
+
+    // å¤åˆ¶ä¼ æ’­
+    bool copyPropagation()
+    {
         bool changed = false;
-        map<string, pair<string, string>> copies;  // ±äÁ¿ -> (²Ù×÷·û, ²Ù×÷Êı)
-        
-        for (size_t i = 0; i < code.size(); i++) {
-            // Ìø¹ı¿ØÖÆÁ÷Ïà¹ØµÄÖ¸Áî
-            if (code[i].op == "LABEL" || code[i].op == "JMP" || code[i].op == "JZ") {
+        map<string, pair<string, string>> copies; // å˜é‡ -> (æ“ä½œç¬¦, æ“ä½œæ•°)
+
+        for (size_t i = 0; i < code.size(); i++)
+        {
+            // è·³è¿‡æ§åˆ¶æµç›¸å…³çš„æŒ‡ä»¤
+            if (code[i].op == "LABEL" || code[i].op == "JMP" || code[i].op == "JZ")
+            {
                 continue;
             }
-            
-            // ¼ÇÂ¼¸³Öµ
-            if (code[i].op == "=") {
+
+            // è®°å½•èµ‹å€¼
+            if (code[i].op == "=")
+            {
                 copies[code[i].result] = make_pair("=", code[i].arg1);
-            } else {
+            }
+            else
+            {
                 copies[code[i].result] = make_pair(code[i].op, code[i].arg1 + "," + code[i].arg2);
             }
-            
-            // Ìæ»»²Ù×÷Êı£¨Ö»Ìæ»»ÁÙÊ±±äÁ¿£©
-            if (code[i].arg1[0] == 't') {
+
+            // æ›¿æ¢æ“ä½œæ•°ï¼ˆåªæ›¿æ¢ä¸´æ—¶å˜é‡ï¼‰
+            if (code[i].arg1[0] == 't')
+            {
                 auto it = copies.find(code[i].arg1);
-                if (it != copies.end() && it->second.first == "=") {
+                if (it != copies.end() && it->second.first == "=")
+                {
                     code[i].arg1 = it->second.second;
                     changed = true;
                 }
             }
-            if (!code[i].arg2.empty() && code[i].arg2[0] == 't') {
+            if (!code[i].arg2.empty() && code[i].arg2[0] == 't')
+            {
                 auto it = copies.find(code[i].arg2);
-                if (it != copies.end() && it->second.first == "=") {
+                if (it != copies.end() && it->second.first == "=")
+                {
                     code[i].arg2 = it->second.second;
                     changed = true;
                 }
@@ -1067,274 +1283,331 @@ public:
     }
 };
 
-// ÔÚ ASTNodeType Ã¶¾ÙºóÌí¼ÓÀàĞÍÏµÍ³Ïà¹Ø¶¨Òå
-enum class DataType {
+// åœ¨ ASTNodeType æšä¸¾åæ·»åŠ ç±»å‹ç³»ç»Ÿç›¸å…³å®šä¹‰
+enum class DataType
+{
     INT,
     VOID,
     UNKNOWN
 };
 
-// ·ûºÅ±íÏî
-struct SymbolEntry {
+// ç¬¦å·è¡¨é¡¹
+struct SymbolEntry
+{
     string name;
     DataType type;
     bool isFunction;
-    vector<DataType> paramTypes;  // Èç¹ûÊÇº¯Êı£¬´æ´¢²ÎÊıÀàĞÍ
-    
-    // Ìí¼ÓÄ¬ÈÏ¹¹Ôìº¯Êı
+    vector<DataType> paramTypes; // å¦‚æœæ˜¯å‡½æ•°ï¼Œå­˜å‚¨å‚æ•°ç±»å‹
+
+    // æ·»åŠ é»˜è®¤æ„é€ å‡½æ•°
     SymbolEntry() : name(""), type(DataType::UNKNOWN), isFunction(false) {}
-    
-    // ±£³ÖÔ­ÓĞµÄ¹¹Ôìº¯Êı
-    SymbolEntry(string n, DataType t, bool isFunc = false) 
+
+    // ä¿æŒåŸæœ‰çš„æ„é€ å‡½æ•°
+    SymbolEntry(string n, DataType t, bool isFunc = false)
         : name(n), type(t), isFunction(isFunc) {}
 };
 
-// ÀàĞÍ¼ì²éÆ÷
-class TypeChecker {
+// ç±»å‹æ£€æŸ¥å™¨
+class TypeChecker
+{
 private:
     map<string, SymbolEntry> symbolTable;
     vector<string> errors;
-    
-    // »ñÈ¡±í´ïÊ½µÄÀàĞÍ
-    DataType getExprType(ASTNode* node) {
-        switch (node->type) {
-            case ASTNodeType::CONSTANT:
-                return DataType::INT;  // Ä¿Ç°ËùÓĞ³£Á¿¶¼ÊÇÕûÊı
-                
-            case ASTNodeType::IDENTIFIER: {
-                auto it = symbolTable.find(node->value);
-                if (it != symbolTable.end()) {
-                    return it->second.type;
-                }
-                errors.push_back("Î´ÉùÃ÷µÄ±äÁ¿: " + node->value);
+
+    // è·å–è¡¨è¾¾å¼çš„ç±»å‹
+    DataType getExprType(ASTNode *node)
+    {
+        switch (node->type)
+        {
+        case ASTNodeType::CONSTANT:
+            return DataType::INT; // ç›®å‰æ‰€æœ‰å¸¸é‡éƒ½æ˜¯æ•´æ•°
+
+        case ASTNodeType::IDENTIFIER:
+        {
+            auto it = symbolTable.find(node->value);
+            if (it != symbolTable.end())
+            {
+                return it->second.type;
+            }
+            errors.push_back("æœªå£°æ˜çš„å˜é‡: " + node->value);
+            return DataType::UNKNOWN;
+        }
+
+        case ASTNodeType::BINARY_EXPR:
+        {
+            DataType leftType = getExprType(node->children[0]);
+            DataType rightType = getExprType(node->children[1]);
+
+            if (leftType == DataType::UNKNOWN || rightType == DataType::UNKNOWN)
+            {
                 return DataType::UNKNOWN;
             }
-                
-            case ASTNodeType::BINARY_EXPR: {
-                DataType leftType = getExprType(node->children[0]);
-                DataType rightType = getExprType(node->children[1]);
-                
-                if (leftType == DataType::UNKNOWN || rightType == DataType::UNKNOWN) {
-                    return DataType::UNKNOWN;
-                }
-                
-                if (leftType != rightType) {
-                    errors.push_back("ÀàĞÍ²»Æ¥Åä: " + node->value);
-                    return DataType::UNKNOWN;
-                }
-                
-                return leftType;
-            }
-                
-            case ASTNodeType::UNARY_EXPR: {
-                return getExprType(node->children[0]);
-            }
-                
-            default:
+
+            if (leftType != rightType)
+            {
+                errors.push_back("ç±»å‹ä¸åŒ¹é…: " + node->value);
                 return DataType::UNKNOWN;
+            }
+
+            return leftType;
+        }
+
+        case ASTNodeType::UNARY_EXPR:
+        {
+            return getExprType(node->children[0]);
+        }
+
+        default:
+            return DataType::UNKNOWN;
         }
     }
 
 public:
-    // ¼ì²éÕû¸ö³ÌĞò
-    bool checkProgram(ASTNode* root) {
-        if (root->type != ASTNodeType::PROGRAM) {
-            errors.push_back("¸ù½Úµã±ØĞëÊÇ³ÌĞò½Úµã");
+    // æ£€æŸ¥æ•´ä¸ªç¨‹åº
+    bool checkProgram(ASTNode *root)
+    {
+        if (root->type != ASTNodeType::PROGRAM)
+        {
+            errors.push_back("æ ¹èŠ‚ç‚¹å¿…é¡»æ˜¯ç¨‹åºèŠ‚ç‚¹");
             return false;
         }
-        
-        // ¼ì²éÃ¿¸öº¯ÊıÉùÃ÷
-        for (auto child : root->children) {
+
+        // æ£€æŸ¥æ¯ä¸ªå‡½æ•°å£°æ˜
+        for (auto child : root->children)
+        {
             checkFunctionDecl(child);
         }
-        
+
         return errors.empty();
     }
-    
-    // ¼ì²éº¯ÊıÉùÃ÷
-    void checkFunctionDecl(ASTNode* node) {
-        if (node->type != ASTNodeType::FUNCTION_DECL) return;
-        
+
+    // æ£€æŸ¥å‡½æ•°å£°æ˜
+    void checkFunctionDecl(ASTNode *node)
+    {
+        if (node->type != ASTNodeType::FUNCTION_DECL)
+            return;
+
         string funcName = node->children[0]->value;
         DataType returnType = node->value == "int" ? DataType::INT : DataType::VOID;
-        
-        // Ìí¼Óº¯Êıµ½·ûºÅ±í
+
+        // æ·»åŠ å‡½æ•°åˆ°ç¬¦å·è¡¨
         symbolTable[funcName] = SymbolEntry(funcName, returnType, true);
-        
-        // ¼ì²éº¯ÊıÌå
+
+        // æ£€æŸ¥å‡½æ•°ä½“
         checkCompoundStmt(node->children[1], returnType);
     }
-    
-    // ¼ì²é¸´ºÏÓï¾ä
-    void checkCompoundStmt(ASTNode* node, DataType currentFuncType) {
-        if (node->type != ASTNodeType::COMPOUND_STMT) return;
-        
-        // ¼ì²éÃ¿¸öÓï¾ä
-        for (auto stmt : node->children) {
+
+    // æ£€æŸ¥å¤åˆè¯­å¥
+    void checkCompoundStmt(ASTNode *node, DataType currentFuncType)
+    {
+        if (node->type != ASTNodeType::COMPOUND_STMT)
+            return;
+
+        // æ£€æŸ¥æ¯ä¸ªè¯­å¥
+        for (auto stmt : node->children)
+        {
             checkStatement(stmt, currentFuncType);
         }
     }
-    
-    // ¼ì²éµ¥¸öÓï¾ä
-    void checkStatement(ASTNode* node, DataType currentFuncType) {
-        switch (node->type) {
-            case ASTNodeType::VAR_DECL: {
-                string varName = node->children[0]->value;
-                DataType varType = node->value == "int" ? DataType::INT : DataType::VOID;
-                
-                // ¼ì²é±äÁ¿ÖØ¶¨Òå
-                if (symbolTable.find(varName) != symbolTable.end()) {
-                    errors.push_back("±äÁ¿ÖØ¶¨Òå: " + varName);
-                    return;
-                }
-                
-                // Ìí¼Óµ½·ûºÅ±í
-                symbolTable[varName] = SymbolEntry(varName, varType);
-                
-                // Èç¹ûÓĞ³õÊ¼»¯±í´ïÊ½£¬¼ì²éÀàĞÍÆ¥Åä
-                if (node->children.size() > 1) {
-                    DataType initType = getExprType(node->children[1]);
-                    if (initType != varType && initType != DataType::UNKNOWN) {
-                        errors.push_back("³õÊ¼»¯ÀàĞÍ²»Æ¥Åä: " + varName);
-                    }
-                }
-                break;
+
+    // æ£€æŸ¥å•ä¸ªè¯­å¥
+    void checkStatement(ASTNode *node, DataType currentFuncType)
+    {
+        switch (node->type)
+        {
+        case ASTNodeType::VAR_DECL:
+        {
+            string varName = node->children[0]->value;
+            DataType varType = node->value == "int" ? DataType::INT : DataType::VOID;
+
+            // æ£€æŸ¥å˜é‡é‡å®šä¹‰
+            if (symbolTable.find(varName) != symbolTable.end())
+            {
+                errors.push_back("å˜é‡é‡å®šä¹‰: " + varName);
+                return;
             }
-                
-            case ASTNodeType::ASSIGN_STMT: {
-                string varName = node->children[0]->value;
-                auto it = symbolTable.find(varName);
-                if (it == symbolTable.end()) {
-                    errors.push_back("Ê¹ÓÃÎ´ÉùÃ÷µÄ±äÁ¿: " + varName);
-                    return;
+
+            // æ·»åŠ åˆ°ç¬¦å·è¡¨
+            symbolTable[varName] = SymbolEntry(varName, varType);
+
+            // å¦‚æœæœ‰åˆå§‹åŒ–è¡¨è¾¾å¼ï¼Œæ£€æŸ¥ç±»å‹åŒ¹é…
+            if (node->children.size() > 1)
+            {
+                DataType initType = getExprType(node->children[1]);
+                if (initType != varType && initType != DataType::UNKNOWN)
+                {
+                    errors.push_back("åˆå§‹åŒ–ç±»å‹ä¸åŒ¹é…: " + varName);
                 }
-                
-                DataType exprType = getExprType(node->children[1]);
-                if (exprType != it->second.type && exprType != DataType::UNKNOWN) {
-                    errors.push_back("¸³ÖµÀàĞÍ²»Æ¥Åä: " + varName);
-                }
-                break;
             }
-                
-            case ASTNodeType::IF_STMT: {
-                // ¼ì²éÌõ¼ş±í´ïÊ½
-                DataType condType = getExprType(node->children[0]);
-                if (condType != DataType::INT && condType != DataType::UNKNOWN) {
-                    errors.push_back("ifÌõ¼ş±ØĞëÊÇÕûÊıÀàĞÍ");
-                }
-                
-                // ¼ì²é·ÖÖ§
-                checkCompoundStmt(node->children[1], currentFuncType);
-                if (node->children.size() > 2) {
-                    checkCompoundStmt(node->children[2], currentFuncType);
-                }
-                break;
+            break;
+        }
+
+        case ASTNodeType::ASSIGN_STMT:
+        {
+            string varName = node->children[0]->value;
+            auto it = symbolTable.find(varName);
+            if (it == symbolTable.end())
+            {
+                errors.push_back("ä½¿ç”¨æœªå£°æ˜çš„å˜é‡: " + varName);
+                return;
             }
-                
-            case ASTNodeType::WHILE_STMT: {
-                // ¼ì²éÌõ¼ş±í´ïÊ½
-                DataType condType = getExprType(node->children[0]);
-                if (condType != DataType::INT && condType != DataType::UNKNOWN) {
-                    errors.push_back("whileÌõ¼ş±ØĞëÊÇÕûÊıÀàĞÍ");
-                }
-                
-                // ¼ì²éÑ­»·Ìå
-                checkCompoundStmt(node->children[1], currentFuncType);
-                break;
+
+            DataType exprType = getExprType(node->children[1]);
+            if (exprType != it->second.type && exprType != DataType::UNKNOWN)
+            {
+                errors.push_back("èµ‹å€¼ç±»å‹ä¸åŒ¹é…: " + varName);
             }
-                
-            case ASTNodeType::RETURN_STMT: {
-                if (node->children.empty()) {
-                    if (currentFuncType != DataType::VOID) {
-                        errors.push_back("·µ»ØÖµÀàĞÍ²»Æ¥Åä£ºÆÚÍûint£¬µÃµ½void");
-                    }
-                } else {
-                    DataType returnType = getExprType(node->children[0]);
-                    if (returnType != currentFuncType && returnType != DataType::UNKNOWN) {
-                        errors.push_back("·µ»ØÖµÀàĞÍ²»Æ¥Åä");
-                    }
-                }
-                break;
+            break;
+        }
+
+        case ASTNodeType::IF_STMT:
+        {
+            // æ£€æŸ¥æ¡ä»¶è¡¨è¾¾å¼
+            DataType condType = getExprType(node->children[0]);
+            if (condType != DataType::INT && condType != DataType::UNKNOWN)
+            {
+                errors.push_back("ifæ¡ä»¶å¿…é¡»æ˜¯æ•´æ•°ç±»å‹");
             }
+
+            // æ£€æŸ¥åˆ†æ”¯
+            checkCompoundStmt(node->children[1], currentFuncType);
+            if (node->children.size() > 2)
+            {
+                checkCompoundStmt(node->children[2], currentFuncType);
+            }
+            break;
+        }
+
+        case ASTNodeType::WHILE_STMT:
+        {
+            // æ£€æŸ¥æ¡ä»¶è¡¨è¾¾å¼
+            DataType condType = getExprType(node->children[0]);
+            if (condType != DataType::INT && condType != DataType::UNKNOWN)
+            {
+                errors.push_back("whileæ¡ä»¶å¿…é¡»æ˜¯æ•´æ•°ç±»å‹");
+            }
+
+            // æ£€æŸ¥å¾ªç¯ä½“
+            checkCompoundStmt(node->children[1], currentFuncType);
+            break;
+        }
+
+        case ASTNodeType::RETURN_STMT:
+        {
+            if (node->children.empty())
+            {
+                if (currentFuncType != DataType::VOID)
+                {
+                    errors.push_back("è¿”å›å€¼ç±»å‹ä¸åŒ¹é…ï¼šæœŸæœ›intï¼Œå¾—åˆ°void");
+                }
+            }
+            else
+            {
+                DataType returnType = getExprType(node->children[0]);
+                if (returnType != currentFuncType && returnType != DataType::UNKNOWN)
+                {
+                    errors.push_back("è¿”å›å€¼ç±»å‹ä¸åŒ¹é…");
+                }
+            }
+            break;
+        }
         }
     }
-    
-    // »ñÈ¡´íÎóĞÅÏ¢
-    vector<string> getErrors() const {
+
+    // è·å–é”™è¯¯ä¿¡æ¯
+    vector<string> getErrors() const
+    {
         return errors;
     }
 };
 
-// ÔÚ TypeChecker ÀàºóÌí¼Ó´úÂëÉú³ÉÆ÷
-class CodeGenerator {
+// åœ¨ TypeChecker ç±»åæ·»åŠ ä»£ç ç”Ÿæˆå™¨
+class CodeGenerator
+{
 private:
     vector<string> assembly;
-    map<string, string> varMap;  // ±äÁ¿µ½ÄÚ´æÎ»ÖÃµÄÓ³Éä
-    int stackOffset = 0;         // µ±Ç°Õ»Æ«ÒÆ
-    int labelCount = 0;          // ±êÇ©¼ÆÊıÆ÷
-    
-    // Éú³ÉĞÂµÄ±êÇ©
-    string newLabel() {
+    map<string, string> varMap; // å˜é‡åˆ°å†…å­˜ä½ç½®çš„æ˜ å°„
+    int stackOffset = 0;        // å½“å‰æ ˆåç§»
+    int labelCount = 0;         // æ ‡ç­¾è®¡æ•°å™¨
+
+    // ç”Ÿæˆæ–°çš„æ ‡ç­¾
+    string newLabel()
+    {
         return "L" + to_string(labelCount++);
     }
-    
-    // ·ÖÅäÕ»¿Õ¼ä
-    string allocateVar(const string& var) {
-        if (varMap.find(var) == varMap.end()) {
-            stackOffset += 4;  // Îª±äÁ¿·ÖÅä4×Ö½Ú
+
+    // åˆ†é…æ ˆç©ºé—´
+    string allocateVar(const string &var)
+    {
+        if (varMap.find(var) == varMap.end())
+        {
+            stackOffset += 4; // ä¸ºå˜é‡åˆ†é…4å­—èŠ‚
             varMap[var] = "[ebp-" + to_string(stackOffset) + "]";
         }
         return varMap[var];
     }
-    
-    // Éú³ÉÊı¾İ¶Î
-    void generateDataSection() {
+
+    // ç”Ÿæˆæ•°æ®æ®µ
+    void generateDataSection()
+    {
         assembly.push_back("section .data");
-        // Ìí¼Ó³£Á¿ºÍ×Ö·û´®
+        // æ·»åŠ å¸¸é‡å’Œå­—ç¬¦ä¸²
     }
-    
-    // Éú³É´úÂë¶Î
-    void generateTextSection() {
+
+    // ç”Ÿæˆä»£ç æ®µ
+    void generateTextSection()
+    {
         assembly.push_back("section .text");
         assembly.push_back("global main");
         assembly.push_back("");
     }
 
 public:
-    // ´ÓËÄÔªÊ½Éú³É»ã±à´úÂë
-    vector<string> generate(const vector<Quadruple>& code) {
+    // ä»å››å…ƒå¼ç”Ÿæˆæ±‡ç¼–ä»£ç 
+    vector<string> generate(const vector<Quadruple> &code)
+    {
         generateDataSection();
         generateTextSection();
-        
-        for (const auto& quad : code) {
-            if (quad.op == "FUNC_BEGIN") {
-                if (quad.arg1 == "main") {
+
+        for (const auto &quad : code)
+        {
+            if (quad.op == "FUNC_BEGIN")
+            {
+                if (quad.arg1 == "main")
+                {
                     assembly.push_back("main:");
                     assembly.push_back("    push ebp");
                     assembly.push_back("    mov ebp, esp");
-                    assembly.push_back("    sub esp, 64");  // Ô¤ÁôÕ»¿Õ¼ä
+                    assembly.push_back("    sub esp, 64"); // é¢„ç•™æ ˆç©ºé—´
                 }
             }
-            else if (quad.op == "FUNC_END") {
-                if (quad.arg1 == "main") {
+            else if (quad.op == "FUNC_END")
+            {
+                if (quad.arg1 == "main")
+                {
                     assembly.push_back("    mov esp, ebp");
                     assembly.push_back("    pop ebp");
                     assembly.push_back("    ret");
                 }
             }
-            else if (quad.op == "=") {
+            else if (quad.op == "=")
+            {
                 string dest = allocateVar(quad.result);
-                if (isdigit(quad.arg1[0]) || quad.arg1[0] == '-') {
-                    // ³£Á¿¸³Öµ
+                if (isdigit(quad.arg1[0]) || quad.arg1[0] == '-')
+                {
+                    // å¸¸é‡èµ‹å€¼
                     assembly.push_back("    mov dword " + dest + ", " + quad.arg1);
-                } else {
-                    // ±äÁ¿¸³Öµ
+                }
+                else
+                {
+                    // å˜é‡èµ‹å€¼
                     string src = allocateVar(quad.arg1);
                     assembly.push_back("    mov eax, " + src);
                     assembly.push_back("    mov " + dest + ", eax");
                 }
             }
-            else if (quad.op == "+") {
+            else if (quad.op == "+")
+            {
                 string src1 = allocateVar(quad.arg1);
                 string src2 = allocateVar(quad.arg2);
                 string dest = allocateVar(quad.result);
@@ -1342,7 +1615,8 @@ public:
                 assembly.push_back("    add eax, " + src2);
                 assembly.push_back("    mov " + dest + ", eax");
             }
-            else if (quad.op == "-") {
+            else if (quad.op == "-")
+            {
                 string src1 = allocateVar(quad.arg1);
                 string src2 = allocateVar(quad.arg2);
                 string dest = allocateVar(quad.result);
@@ -1350,7 +1624,8 @@ public:
                 assembly.push_back("    sub eax, " + src2);
                 assembly.push_back("    mov " + dest + ", eax");
             }
-            else if (quad.op == "*") {
+            else if (quad.op == "*")
+            {
                 string src1 = allocateVar(quad.arg1);
                 string src2 = allocateVar(quad.arg2);
                 string dest = allocateVar(quad.result);
@@ -1358,55 +1633,72 @@ public:
                 assembly.push_back("    imul dword " + src2);
                 assembly.push_back("    mov " + dest + ", eax");
             }
-            else if (quad.op == "/") {
+            else if (quad.op == "/")
+            {
                 string src1 = allocateVar(quad.arg1);
                 string src2 = allocateVar(quad.arg2);
                 string dest = allocateVar(quad.result);
                 assembly.push_back("    mov eax, " + src1);
-                assembly.push_back("    cdq");  // À©Õ¹ eax µ½ edx:eax
+                assembly.push_back("    cdq"); // æ‰©å±• eax åˆ° edx:eax
                 assembly.push_back("    idiv " + src2);
                 assembly.push_back("    mov " + dest + ", eax");
             }
-            else if (quad.op == "JMP") {
+            else if (quad.op == "JMP")
+            {
                 assembly.push_back("    jmp " + quad.result);
             }
-            else if (quad.op == "JZ") {
-                if (isdigit(quad.arg1[0]) || quad.arg1[0] == '-') {
-                    // ³£Á¿Ìõ¼ş
+            else if (quad.op == "JZ")
+            {
+                if (isdigit(quad.arg1[0]) || quad.arg1[0] == '-')
+                {
+                    // å¸¸é‡æ¡ä»¶
                     int value = stoi(quad.arg1);
-                    if (value == 0) {
+                    if (value == 0)
+                    {
                         assembly.push_back("    jmp " + quad.result);
                     }
-                } else {
-                    // ±äÁ¿Ìõ¼ş
+                }
+                else
+                {
+                    // å˜é‡æ¡ä»¶
                     string src = allocateVar(quad.arg1);
                     assembly.push_back("    mov eax, " + src);
-                    assembly.push_back("    test eax, eax");  // ²âÊÔÊÇ·ñÎª0
+                    assembly.push_back("    test eax, eax"); // æµ‹è¯•æ˜¯å¦ä¸º0
                     assembly.push_back("    jz " + quad.result);
                 }
             }
-            else if (quad.op == "LABEL") {
+            else if (quad.op == "LABEL")
+            {
                 assembly.push_back(quad.result + ":");
             }
-            else if (quad.op == "return") {
-                if (!quad.arg1.empty()) {
-                    if (isdigit(quad.arg1[0]) || quad.arg1[0] == '-') {
+            else if (quad.op == "return")
+            {
+                if (!quad.arg1.empty())
+                {
+                    if (isdigit(quad.arg1[0]) || quad.arg1[0] == '-')
+                    {
                         assembly.push_back("    mov eax, " + quad.arg1);
-                    } else {
+                    }
+                    else
+                    {
                         string src = allocateVar(quad.arg1);
                         assembly.push_back("    mov eax, " + src);
                     }
                 }
             }
-            else if (quad.op == ">") {
+            else if (quad.op == ">")
+            {
                 string src1 = allocateVar(quad.arg1);
                 string src2;
-                if (isdigit(quad.arg2[0]) || quad.arg2[0] == '-') {
-                    // Èç¹ûÊÇ³£Á¿
+                if (isdigit(quad.arg2[0]) || quad.arg2[0] == '-')
+                {
+                    // å¦‚æœæ˜¯å¸¸é‡
                     assembly.push_back("    mov eax, " + src1);
                     assembly.push_back("    cmp eax, " + quad.arg2);
-                } else {
-                    // Èç¹ûÊÇ±äÁ¿
+                }
+                else
+                {
+                    // å¦‚æœæ˜¯å˜é‡
                     src2 = allocateVar(quad.arg2);
                     assembly.push_back("    mov eax, " + src1);
                     assembly.push_back("    cmp eax, dword " + src2);
@@ -1416,15 +1708,19 @@ public:
                 assembly.push_back("    movzx eax, al");
                 assembly.push_back("    mov " + dest + ", eax");
             }
-            else if (quad.op == "<") {
+            else if (quad.op == "<")
+            {
                 string src1 = allocateVar(quad.arg1);
                 string src2;
-                if (isdigit(quad.arg2[0]) || quad.arg2[0] == '-') {
-                    // Èç¹ûÊÇ³£Á¿
+                if (isdigit(quad.arg2[0]) || quad.arg2[0] == '-')
+                {
+                    // å¦‚æœæ˜¯å¸¸é‡
                     assembly.push_back("    mov eax, " + src1);
                     assembly.push_back("    cmp eax, " + quad.arg2);
-                } else {
-                    // Èç¹ûÊÇ±äÁ¿
+                }
+                else
+                {
+                    // å¦‚æœæ˜¯å˜é‡
                     src2 = allocateVar(quad.arg2);
                     assembly.push_back("    mov eax, " + src1);
                     assembly.push_back("    cmp eax, dword " + src2);
@@ -1435,176 +1731,192 @@ public:
                 assembly.push_back("    mov " + dest + ", eax");
             }
         }
-        
+
         return assembly;
     }
 };
 
-int main() {
+int main()
+{
     string filename;
-    cout << "ÇëÊäÈëÒª·ÖÎöµÄÎÄ¼şÃû£¨ÎŞĞèÊäÈë.txtºó×º£©£º";
+    cout << "è¯·è¾“å…¥è¦åˆ†æçš„æ–‡ä»¶åï¼ˆæ— éœ€è¾“å…¥.txtåç¼€ï¼‰ï¼š";
     cin >> filename;
-    
-    // ×Ô¶¯Ìí¼Ó.txtºó×º
+
+    // è‡ªåŠ¨æ·»åŠ .txtåç¼€
     filename += ".txt";
-    
-    // ´ÓÎÄ¼ş¶ÁÈ¡Ô´´úÂë
+
+    // ä»æ–‡ä»¶è¯»å–æºä»£ç 
     ifstream inFile(filename);
-    if (!inFile) {
-        cout << "´íÎó£ºÎŞ·¨´ò¿ªÎÄ¼ş " << filename << endl;
+    if (!inFile)
+    {
+        cout << "é”™è¯¯ï¼šæ— æ³•æ‰“å¼€æ–‡ä»¶ " << filename << endl;
         return 1;
     }
 
-    // ¶ÁÈ¡ÎÄ¼şÄÚÈİ
+    // è¯»å–æ–‡ä»¶å†…å®¹
     stringstream buffer;
     buffer << inFile.rdbuf();
     string sourceCode = buffer.str();
     inFile.close();
-    
-    // ´´½¨´Ê·¨·ÖÎöÆ÷ÊµÀı
+
+    // åˆ›å»ºè¯æ³•åˆ†æå™¨å®ä¾‹
     Lexer lexer(sourceCode);
-    
-    // ´´½¨Óï·¨·ÖÎöÆ÷ÊµÀı
+
+    // åˆ›å»ºè¯­æ³•åˆ†æå™¨å®ä¾‹
     Parser parser(lexer);
-    
-    // ´´½¨Êä³öÎÄ¼şÃû£¨ÔÚÔ­ÎÄ¼şÃûºóÌí¼Ó_output.txt£©
+
+    // åˆ›å»ºè¾“å‡ºæ–‡ä»¶åï¼ˆåœ¨åŸæ–‡ä»¶ååæ·»åŠ _output.txtï¼‰
     string outFilename = filename.substr(0, filename.length() - 4) + "_output.txt";
     ofstream outFile(outFilename);
-    
-    if (!outFile) {
-        cout << "´íÎó£ºÎŞ·¨´´½¨Êä³öÎÄ¼ş " << outFilename << endl;
+
+    if (!outFile)
+    {
+        cout << "é”™è¯¯ï¼šæ— æ³•åˆ›å»ºè¾“å‡ºæ–‡ä»¶ " << outFilename << endl;
         return 1;
     }
-    
-    try {
-        // ÏÈ½øĞĞ´Ê·¨·ÖÎö
-        cout << "\n´Ê·¨·ÖÎö½á¹û£º\n";
-        cout << setw(5) << "ĞĞºÅ" << setw(15) << "Àà±ğ" << setw(20) << "´ÊËØ" << endl;
+
+    try
+    {
+        // å…ˆè¿›è¡Œè¯æ³•åˆ†æ
+        cout << "\nè¯æ³•åˆ†æç»“æœï¼š\n";
+        cout << setw(5) << "è¡Œå·" << setw(15) << "ç±»åˆ«" << setw(20) << "è¯ç´ " << endl;
         cout << string(40, '-') << endl;
-        
-        outFile << "\n´Ê·¨·ÖÎö½á¹û£º\n";
-        outFile << setw(5) << "ĞĞºÅ" << setw(15) << "Àà±ğ" << setw(20) << "´ÊËØ" << endl;
+
+        outFile << "\nè¯æ³•åˆ†æç»“æœï¼š\n";
+        outFile << setw(5) << "è¡Œå·" << setw(15) << "ç±»åˆ«" << setw(20) << "è¯ç´ " << endl;
         outFile << string(40, '-') << endl;
-        
-        // ±£´æÔ´´úÂëµÄ¸±±¾ÓÃÓÚ´Ê·¨·ÖÎö
+
+        // ä¿å­˜æºä»£ç çš„å‰¯æœ¬ç”¨äºè¯æ³•åˆ†æ
         string sourceCodeCopy = sourceCode;
         Lexer lexerForTokens(sourceCodeCopy);
         Token token;
-        do {
+        do
+        {
             token = lexerForTokens.getNextToken();
-            if (token.type.name != "EOF") {
-                // Êä³öµ½¿ØÖÆÌ¨
-                cout << setw(5) << token.line 
+            if (token.type.name != "EOF")
+            {
+                // è¾“å‡ºåˆ°æ§åˆ¶å°
+                cout << setw(5) << token.line
                      << setw(15) << getCategoryName(token.type.category)
                      << setw(20) << token.lexeme << endl;
-                
-                // Êä³öµ½ÎÄ¼ş
-                outFile << setw(5) << token.line 
-                       << setw(15) << getCategoryName(token.type.category)
-                       << setw(20) << token.lexeme << endl;
+
+                // è¾“å‡ºåˆ°æ–‡ä»¶
+                outFile << setw(5) << token.line
+                        << setw(15) << getCategoryName(token.type.category)
+                        << setw(20) << token.lexeme << endl;
             }
         } while (token.type.name != "EOF");
-        
-        // ½øĞĞÓï·¨·ÖÎö
-        cout << "\nÓï·¨·ÖÎö½á¹û£º\n";
-        cout << "Óï·¨Ê÷£º\n";
-        outFile << "\nÓï·¨·ÖÎö½á¹û£º\n";
-        outFile << "Óï·¨Ê÷£º\n";
-        
-        // ´´½¨ĞÂµÄ´Ê·¨·ÖÎöÆ÷ºÍÓï·¨·ÖÎöÆ÷
+
+        // è¿›è¡Œè¯­æ³•åˆ†æ
+        cout << "\nè¯­æ³•åˆ†æç»“æœï¼š\n";
+        cout << "è¯­æ³•æ ‘ï¼š\n";
+        outFile << "\nè¯­æ³•åˆ†æç»“æœï¼š\n";
+        outFile << "è¯­æ³•æ ‘ï¼š\n";
+
+        // åˆ›å»ºæ–°çš„è¯æ³•åˆ†æå™¨å’Œè¯­æ³•åˆ†æå™¨
         Lexer lexer(sourceCode);
         Parser parser(lexer);
-        ASTNode* root = parser.parse();
-        
-        // ´òÓ¡Óï·¨Ê÷£¨Ö»´òÓ¡Ò»´Î£©
-        root->print(cout);  // ´òÓ¡µ½¿ØÖÆÌ¨
-        
-        // ½«Óï·¨Ê÷±£´æµ½ÎÄ¼ş
+        ASTNode *root = parser.parse();
+
+        // æ‰“å°è¯­æ³•æ ‘ï¼ˆåªæ‰“å°ä¸€æ¬¡ï¼‰
+        root->print(cout); // æ‰“å°åˆ°æ§åˆ¶å°
+
+        // å°†è¯­æ³•æ ‘ä¿å­˜åˆ°æ–‡ä»¶
         outFile << "\n";
-        root->print(outFile);  // ´òÓ¡µ½ÎÄ¼ş
-        
-        // Éú³ÉËÄÔªÊ½
-        cout << "\nÖĞ¼ä´úÂë£¨ËÄÔªÊ½£©£º\n";
-        outFile << "\nÖĞ¼ä´úÂë£¨ËÄÔªÊ½£©£º\n";
+        root->print(outFile); // æ‰“å°åˆ°æ–‡ä»¶
+
+        // ç”Ÿæˆå››å…ƒå¼
+        cout << "\nä¸­é—´ä»£ç ï¼ˆå››å…ƒå¼ï¼‰ï¼š\n";
+        outFile << "\nä¸­é—´ä»£ç ï¼ˆå››å…ƒå¼ï¼‰ï¼š\n";
 
         vector<Quadruple> intermediateCode = root->generateCode();
-        for (size_t i = 0; i < intermediateCode.size(); i++) {
-            cout << i << ": " << intermediateCode[i].toString() << endl;
-            outFile << i << ": " << intermediateCode[i].toString() << endl;
-        }
-        
-        // Ô­Ê¼ÖĞ¼ä´úÂë
-        cout << "\nÔ­Ê¼ÖĞ¼ä´úÂë£º\n";
-        outFile << "\nÔ­Ê¼ÖĞ¼ä´úÂë£º\n";
-        for (size_t i = 0; i < intermediateCode.size(); i++) {
+        for (size_t i = 0; i < intermediateCode.size(); i++)
+        {
             cout << i << ": " << intermediateCode[i].toString() << endl;
             outFile << i << ": " << intermediateCode[i].toString() << endl;
         }
 
-        // Ö´ĞĞ´úÂëÓÅ»¯
+        // åŸå§‹ä¸­é—´ä»£ç 
+        cout << "\nåŸå§‹ä¸­é—´ä»£ç ï¼š\n";
+        outFile << "\nåŸå§‹ä¸­é—´ä»£ç ï¼š\n";
+        for (size_t i = 0; i < intermediateCode.size(); i++)
+        {
+            cout << i << ": " << intermediateCode[i].toString() << endl;
+            outFile << i << ": " << intermediateCode[i].toString() << endl;
+        }
+
+        // æ‰§è¡Œä»£ç ä¼˜åŒ–
         CodeOptimizer optimizer(intermediateCode);
         optimizer.optimize();
 
-        // ÓÅ»¯ºóµÄÖĞ¼ä´úÂë
-        cout << "\nÓÅ»¯ºóµÄÖĞ¼ä´úÂë£º\n";
-        outFile << "\nÓÅ»¯ºóµÄÖĞ¼ä´úÂë£º\n";
-        for (size_t i = 0; i < intermediateCode.size(); i++) {
+        // ä¼˜åŒ–åçš„ä¸­é—´ä»£ç 
+        cout << "\nä¼˜åŒ–åçš„ä¸­é—´ä»£ç ï¼š\n";
+        outFile << "\nä¼˜åŒ–åçš„ä¸­é—´ä»£ç ï¼š\n";
+        for (size_t i = 0; i < intermediateCode.size(); i++)
+        {
             cout << i << ": " << intermediateCode[i].toString() << endl;
             outFile << i << ": " << intermediateCode[i].toString() << endl;
         }
-        
-        // ÀàĞÍ¼ì²é
-        cout << "\nÀàĞÍ¼ì²é£º\n";
-        outFile << "\nÀàĞÍ¼ì²é£º\n";
+
+        // ç±»å‹æ£€æŸ¥
+        cout << "\nç±»å‹æ£€æŸ¥ï¼š\n";
+        outFile << "\nç±»å‹æ£€æŸ¥ï¼š\n";
 
         TypeChecker typeChecker;
-        if (!typeChecker.checkProgram(root)) {
-            cout << "·¢ÏÖÀàĞÍ´íÎó£º\n";
-            outFile << "·¢ÏÖÀàĞÍ´íÎó£º\n";
-            for (const auto& error : typeChecker.getErrors()) {
+        if (!typeChecker.checkProgram(root))
+        {
+            cout << "å‘ç°ç±»å‹é”™è¯¯ï¼š\n";
+            outFile << "å‘ç°ç±»å‹é”™è¯¯ï¼š\n";
+            for (const auto &error : typeChecker.getErrors())
+            {
                 cout << "- " << error << endl;
                 outFile << "- " << error << endl;
             }
-        } else {
-            cout << "ÀàĞÍ¼ì²éÍ¨¹ı\n";
-            outFile << "ÀàĞÍ¼ì²éÍ¨¹ı\n";
         }
-        
-        // ÔÚÓÅ»¯ºóµÄ´úÂëºóÃæÌí¼Ó
-        cout << "\nÄ¿±ê´úÂë£¨x86»ã±à£©£º\n";
-        outFile << "\nÄ¿±ê´úÂë£¨x86»ã±à£©£º\n";
+        else
+        {
+            cout << "ç±»å‹æ£€æŸ¥é€šè¿‡\n";
+            outFile << "ç±»å‹æ£€æŸ¥é€šè¿‡\n";
+        }
+
+        // åœ¨ä¼˜åŒ–åçš„ä»£ç åé¢æ·»åŠ 
+        cout << "\nç›®æ ‡ä»£ç ï¼ˆx86æ±‡ç¼–ï¼‰ï¼š\n";
+        outFile << "\nç›®æ ‡ä»£ç ï¼ˆx86æ±‡ç¼–ï¼‰ï¼š\n";
 
         CodeGenerator generator;
         vector<string> assemblyCode = generator.generate(intermediateCode);
 
-        // Êä³ö»ã±à´úÂë
-        for (const auto& line : assemblyCode) {
+        // è¾“å‡ºæ±‡ç¼–ä»£ç 
+        for (const auto &line : assemblyCode)
+        {
             cout << line << endl;
             outFile << line << endl;
         }
 
-        // ±£´æ»ã±à´úÂëµ½ÎÄ¼ş
+        // ä¿å­˜æ±‡ç¼–ä»£ç åˆ°æ–‡ä»¶
         string asmFilename = filename.substr(0, filename.length() - 4) + ".asm";
         ofstream asmFile(asmFilename);
-        if (asmFile) {
-            for (const auto& line : assemblyCode) {
+        if (asmFile)
+        {
+            for (const auto &line : assemblyCode)
+            {
                 asmFile << line << endl;
             }
             asmFile.close();
-            cout << "\n»ã±à´úÂëÒÑ±£´æµ½: " << asmFilename << endl;
+            cout << "\næ±‡ç¼–ä»£ç å·²ä¿å­˜åˆ°: " << asmFilename << endl;
         }
-        
-        // ÇåÀíÄÚ´æ
-        // TODO: ÊµÏÖÎö¹¹º¯ÊıÇåÀíÓï·¨Ê÷
-        
-    } catch (const runtime_error& e) {
-        cout << "´íÎó: " << e.what() << endl;
-        outFile << "´íÎó: " << e.what() << endl;
-    }
-    
-    outFile.close();
-    cout << "\n·ÖÎö½á¹ûÒÑ±£´æµ½: " << outFilename << endl;
-    
-	return 0;
-}
 
+        // æ¸…ç†å†…å­˜
+        // TODO: å®ç°ææ„å‡½æ•°æ¸…ç†è¯­æ³•æ ‘
+    }
+    catch (const runtime_error &e)
+    {
+        cout << "é”™è¯¯: " << e.what() << endl;
+        outFile << "é”™è¯¯: " << e.what() << endl;
+    }
+
+    outFile.close();
+    cout << "\nåˆ†æç»“æœå·²ä¿å­˜åˆ°: " << outFilename << endl;
+
+    return 0;
+}
