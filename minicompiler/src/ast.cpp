@@ -49,8 +49,11 @@ static const char* kindName(NodeKind k) {
         case NodeKind::Block: return "Block";
         case NodeKind::StmtList: return "StmtList";
         case NodeKind::Decl: return "Decl";
+        case NodeKind::VarList: return "VarList";
         case NodeKind::Var: return "Var";
         case NodeKind::Assign: return "Assign";
+        case NodeKind::Function: return "Function";
+        case NodeKind::Return: return "Return";
         case NodeKind::If: return "If";
         case NodeKind::While: return "While";
         case NodeKind::For: return "For";

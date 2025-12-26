@@ -51,6 +51,9 @@ Type checkExpr(Node* expr, SymbolTable& symtab, std::vector<std::string>& errors
         case NodeKind::BinOp: {
             auto lt = checkExpr(expr->children[0], symtab, errors);
             auto rt = checkExpr(expr->children[1], symtab, errors);
+            if (lt.base == BasicType::Invalid || rt.base == BasicType::Invalid) {
+                return {BasicType::Invalid}; // avoid cascading errors
+            }
             if (lt.base != BasicType::Int || rt.base != BasicType::Int) {
                 addError(errors, "Type mismatch for operator '" + expr->text + "' at " + posStr(expr->pos));
                 return {BasicType::Invalid};
@@ -59,6 +62,9 @@ Type checkExpr(Node* expr, SymbolTable& symtab, std::vector<std::string>& errors
         }
         case NodeKind::UnOp: {
             auto t = checkExpr(expr->children[0], symtab, errors);
+            if (t.base == BasicType::Invalid) {
+                return {BasicType::Invalid}; // upstream error already reported
+            }
             if (t.base != BasicType::Int) {
                 addError(errors, "Type mismatch for operator '" + expr->text + "' at " + posStr(expr->pos));
                 return {BasicType::Invalid};
@@ -74,10 +80,40 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
     if (!stmt) return;
     switch (stmt->kind) {
         case NodeKind::Decl: {
-            for (auto* v : stmt->children) {
-                std::string err;
-                if (!symtab.declare(v->text, {BasicType::Int}, v->pos, err)) {
-                    addError(errors, err);
+            // first pass: declare vars
+            for (auto* child : stmt->children) {
+                if (child->kind == NodeKind::VarList) {
+                    for (auto* v : child->children) {
+                        if (v->kind != NodeKind::Var) continue;
+                        std::string err;
+                        if (!symtab.declare(v->text, {BasicType::Int}, v->pos, err)) {
+                            addError(errors, err);
+                        }
+                    }
+                } else if (child->kind == NodeKind::Var) {
+                    std::string err;
+                    if (!symtab.declare(child->text, {BasicType::Int}, child->pos, err)) {
+                        addError(errors, err);
+                    }
+                }
+            }
+            // second pass: handle initializers
+            for (auto* child : stmt->children) {
+                if (child->kind == NodeKind::VarList) {
+                    for (auto* v : child->children) {
+                        if (v->kind == NodeKind::Assign) {
+                            auto* lhs = v->children[0];
+                            auto* rhs = v->children[1];
+                            auto sym = symtab.lookup(lhs->text);
+                            if (!sym) {
+                                addError(errors, "Undeclared identifier '" + lhs->text + "' at " + posStr(lhs->pos));
+                            }
+                            auto rt = checkExpr(rhs, symtab, errors);
+                            if (rt.base != BasicType::Int) {
+                                addError(errors, "Type mismatch for initializer at " + posStr(rhs->pos));
+                            }
+                        }
+                    }
                 }
             }
             break;
@@ -95,6 +131,20 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
             if (rt.base != BasicType::Int) {
                 addError(errors, "Right-hand side type mismatch at " + posStr(rhs->pos));
             }
+            break;
+        }
+        case NodeKind::Return: {
+            if (!stmt->children.empty()) {
+                checkExpr(stmt->children[0], symtab, errors);
+            }
+            break;
+        }
+        case NodeKind::Function: {
+            symtab.enterScope();
+            if (!stmt->children.empty()) {
+                checkStmt(stmt->children[0], symtab, errors);
+            }
+            symtab.leaveScope();
             break;
         }
         case NodeKind::If: {

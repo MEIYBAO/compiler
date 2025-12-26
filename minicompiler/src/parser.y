@@ -44,14 +44,14 @@ static SourcePos loc(const YYLTYPE& l) {
 %token <sval> ID
 %token <ival> INTCONST
 
-%token KW_INT KW_IF KW_ELSE KW_WHILE KW_FOR KW_PRINTF KW_SCANF
+%token KW_INT KW_IF KW_ELSE KW_WHILE KW_FOR KW_PRINTF KW_SCANF KW_RETURN
 %token PLUS MINUS MUL DIV MOD POW
 %token ASSIGN
 %token EQ NE GE LE GT LT
 %token AND OR NOT
 %token SEMI COMMA LPAREN RPAREN LBRACE RBRACE
 
-%type <node> program stmt_list stmt block decl id_list assign io_stmt if_stmt while_stmt for_stmt opt_expr opt_assign expr bool_expr rel_expr
+%type <node> program func_def stmt_list stmt block decl init_list init_item assign io_stmt if_stmt while_stmt for_stmt opt_expr opt_assign expr bool_expr rel_expr
 
 %left OR
 %left AND
@@ -71,6 +71,21 @@ program
       if ($1) g_root->children.push_back($1);
       $$ = g_root;
     }
+  | func_def
+    {
+      g_root = makeNode(NodeKind::Program, loc(@1));
+      g_root->children.push_back($1);
+      $$ = g_root;
+    }
+  ;
+
+func_def
+  : KW_INT ID LPAREN RPAREN block
+    {
+      $$ = makeNode(NodeKind::Function, loc(@1), $2);
+      $$->children.push_back($5);
+      free($2);
+    }
   ;
 
 stmt_list
@@ -87,6 +102,10 @@ stmt
   : decl SEMI            { $$ = $1; }
   | assign SEMI          { $$ = $1; }
   | io_stmt SEMI         { $$ = $1; }
+  | KW_RETURN expr SEMI  {
+      $$ = makeNode(NodeKind::Return, loc(@1));
+      $$->children.push_back($2);
+    }
   | if_stmt              { $$ = $1; }
   | while_stmt           { $$ = $1; }
   | for_stmt             { $$ = $1; }
@@ -103,26 +122,43 @@ block
   ;
 
 decl
-  : KW_INT id_list
+  : KW_INT init_list
     {
       $$ = makeNode(NodeKind::Decl, loc(@1));
       if ($2) $$->children.push_back($2);
     }
   ;
 
-id_list
-  : ID
-    {
-      $$ = makeNode(NodeKind::Var, loc(@1), $1);
-      free($1);
-    }
-  | id_list COMMA ID
+init_list
+  : init_item { $$ = $1; }
+  | init_list COMMA init_item
     {
       $$ = $1;
-      $$->children.push_back(makeNode(NodeKind::Var, loc(@3), $3));
-      free($3);
+      for (auto* ch : $3->children) $$->children.push_back(ch);
+      delete $3;
     }
   ;
+
+init_item
+  : ID
+    {
+      $$ = makeNode(NodeKind::VarList, loc(@1));
+      $$->children.push_back(makeNode(NodeKind::Var, loc(@1), $1));
+      free($1);
+    }
+  | ID ASSIGN expr
+    {
+      $$ = makeNode(NodeKind::VarList, loc(@1));
+      mc::Node* v = makeNode(NodeKind::Var, loc(@1), $1);
+      $$->children.push_back(v);
+      mc::Node* a = makeNode(NodeKind::Assign, loc(@2));
+      a->children.push_back(makeNode(NodeKind::Var, loc(@1), $1));
+      a->children.push_back($3);
+      $$->children.push_back(a);
+      free($1);
+    }
+  ;
+
 
 assign
   : ID ASSIGN expr
@@ -201,6 +237,7 @@ bool_expr
   | NOT bool_expr            { $$ = makeUnary("!", $2, loc(@1)); }
   | LPAREN bool_expr RPAREN  { $$ = $2; }
   | rel_expr                 { $$ = $1; }
+  | expr                     { $$ = $1; } /* 允许表达式作条件，非零为真 */
   ;
 
 rel_expr

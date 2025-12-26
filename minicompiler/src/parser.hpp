@@ -59,29 +59,30 @@
      KW_FOR = 264,
      KW_PRINTF = 265,
      KW_SCANF = 266,
-     PLUS = 267,
-     MINUS = 268,
-     MUL = 269,
-     DIV = 270,
-     MOD = 271,
-     POW = 272,
-     ASSIGN = 273,
-     EQ = 274,
-     NE = 275,
-     GE = 276,
-     LE = 277,
-     GT = 278,
-     LT = 279,
-     AND = 280,
-     OR = 281,
-     NOT = 282,
-     SEMI = 283,
-     COMMA = 284,
-     LPAREN = 285,
-     RPAREN = 286,
-     LBRACE = 287,
-     RBRACE = 288,
-     UMINUS = 289
+     KW_RETURN = 267,
+     PLUS = 268,
+     MINUS = 269,
+     MUL = 270,
+     DIV = 271,
+     MOD = 272,
+     POW = 273,
+     ASSIGN = 274,
+     EQ = 275,
+     NE = 276,
+     GE = 277,
+     LE = 278,
+     GT = 279,
+     LT = 280,
+     AND = 281,
+     OR = 282,
+     NOT = 283,
+     SEMI = 284,
+     COMMA = 285,
+     LPAREN = 286,
+     RPAREN = 287,
+     LBRACE = 288,
+     RBRACE = 289,
+     UMINUS = 290
    };
 #endif
 
@@ -101,7 +102,7 @@ typedef union YYSTYPE
 
 
 /* Line 1676 of yacc.c  */
-#line 105 "src/parser.hpp"
+#line 106 "src/parser.hpp"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

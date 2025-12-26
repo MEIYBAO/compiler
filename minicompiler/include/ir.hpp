@@ -23,7 +23,6 @@ struct Value {
 class IRBuilder {
 public:
     Value genExpr(Node* expr);
-    void genCond(Node* expr, const std::string& ltrue, const std::string& lfalse);
     void genStmt(Node* stmt);
     void gen(Node* root);
 

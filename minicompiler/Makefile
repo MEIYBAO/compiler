@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -Iinclude
+CXXFLAGS = -std=c++17 -Wall -Wextra -Iinclude -finput-charset=UTF-8 -fexec-charset=UTF-8
 
 SRC_DIR = src
 OBJS = $(SRC_DIR)/parser.o $(SRC_DIR)/scanner.o $(SRC_DIR)/ast.o $(SRC_DIR)/semantic.o $(SRC_DIR)/ir.o $(SRC_DIR)/optimizer.o $(SRC_DIR)/codegen.o $(SRC_DIR)/main.o
@@ -17,4 +17,4 @@ minic: $(OBJS)
 
 .PHONY: clean
 clean:
-	rm -f $(SRC_DIR)/parser.cpp $(SRC_DIR)/parser.hpp $(SRC_DIR)/scanner.cpp $(OBJS) minic
+	rm -f $(SRC_DIR)/parser.cpp $(SRC_DIR)/parser.hpp $(OBJS) minic

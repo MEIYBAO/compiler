@@ -1,4 +1,4 @@
-// Handwritten scanner to replace flex (avoids path issues on Windows)
+// Handwritten scanner to avoid flex path issues on Windows
 #include "parser.hpp"
 #include <cctype>
 #include <cstdio>
@@ -12,30 +12,39 @@ extern YYSTYPE yylval;
 extern YYLTYPE yylloc;
 FILE* yyin = stdin;
 
-static int peekc = EOF;
-
-static int getc_wrap() {
-    int c;
-    if (peekc != EOF) {
-        c = peekc;
-        peekc = EOF;
-    } else {
-        c = fgetc(yyin);
+static int getch() {
+    while (true) {
+        int c = fgetc(yyin);
+        if (c == EOF) return EOF;
+        if (c == 0xEF) {
+            int b2 = fgetc(yyin);
+            int b3 = fgetc(yyin);
+            if (b2 == 0xBB && b3 == 0xBF) {
+                // skip BOM
+                continue;
+            } else {
+                if (b3 != EOF) ungetc(b3, yyin);
+                if (b2 != EOF) ungetc(b2, yyin);
+                c = 0xEF;
+            }
+        }
+        if (c == '\n') {
+            yylineno++;
+            yycolumn = 1;
+        } else {
+            yycolumn++;
+        }
+        return c;
     }
-    if (c == '\n') {
-        yylineno++;
-        yycolumn = 1;
-    } else if (c != EOF) {
-        yycolumn++;
-    }
-    return c;
 }
 
-static void ungetc_wrap(int c) {
+static void ungetch(int c) {
     if (c == EOF) return;
-    peekc = c;
+    ungetc(c, yyin);
     if (c == '\n') {
         yylineno--;
+        // column reset is rough; not critical for positions after unget
+        yycolumn = 1;
     } else {
         yycolumn--;
     }
@@ -47,33 +56,18 @@ static void set_loc(int start_col, int end_col) {
     yylloc.last_column = end_col;
 }
 
-static int match_follow(char expect, int tok_true, int tok_false) {
-    int c = getc_wrap();
-    if (c == expect) {
-        set_loc(yycolumn - 2, yycolumn - 1);
-        return tok_true;
-    }
-    ungetc_wrap(c);
-    set_loc(yycolumn - 1, yycolumn - 1);
-    return tok_false;
-}
-
-static char* dup_cstr(const std::string& s) {
-    char* p = static_cast<char*>(std::malloc(s.size() + 1));
-    if (!p) return nullptr;
-    std::memcpy(p, s.c_str(), s.size() + 1);
-    return p;
-}
-
 static int keyword_or_id(const std::string& s) {
     if (s == "int") return KW_INT;
     if (s == "if") return KW_IF;
     if (s == "else") return KW_ELSE;
     if (s == "while") return KW_WHILE;
     if (s == "for") return KW_FOR;
+    if (s == "return") return KW_RETURN;
     if (s == "printf") return KW_PRINTF;
     if (s == "scanf") return KW_SCANF;
-    yylval.sval = dup_cstr(s);
+    char* p = static_cast<char*>(std::malloc(s.size() + 1));
+    std::memcpy(p, s.c_str(), s.size() + 1);
+    yylval.sval = p;
     return ID;
 }
 
@@ -81,43 +75,38 @@ int yylex() {
     int c;
     while (true) {
         int start_col = yycolumn;
-        c = getc_wrap();
+        c = getch();
         if (c == EOF) return 0;
         if (c == ' ' || c == '\t' || c == '\r' || c == '\n') continue;
 
-        // single-line comment
-        if (c == '/' && (peekc = fgetc(yyin)) == '/') {
-            while ((c = fgetc(yyin)) != '\n' && c != EOF) {}
-            if (c == '\n') { yylineno++; yycolumn = 1; }
-            peekc = EOF;
-            continue;
-        }
-        // multi-line comment
-        if (c == '/' && peekc == '*') {
-            peekc = EOF;
-            int prev = 0;
-            while ((c = fgetc(yyin)) != EOF) {
-                if (c == '\n') { yylineno++; yycolumn = 1; }
-                else yycolumn++;
-                if (prev == '*' && c == '/') break;
-                prev = c;
+        // comments
+        if (c == '/') {
+            int d = getch();
+            if (d == '/') {
+                while ((c = getch()) != '\n' && c != EOF) {}
+                continue;
+            } else if (d == '*') {
+                int prev = 0;
+                while ((c = getch()) != EOF) {
+                    if (prev == '*' && c == '/') break;
+                    prev = c;
+                }
+                continue;
+            } else {
+                ungetch(d);
             }
-            continue;
-        } else if (peekc != EOF) {
-            ungetc_wrap(peekc);
-            peekc = EOF;
         }
 
-        // identifiers / keywords
+        // identifiers/keywords
         if (std::isalpha(c) || c == '_') {
             std::string s;
             s.push_back(static_cast<char>(c));
             while (true) {
-                int d = getc_wrap();
+                int d = getch();
                 if (std::isalnum(d) || d == '_') {
                     s.push_back(static_cast<char>(d));
                 } else {
-                    ungetc_wrap(d);
+                    ungetch(d);
                     break;
                 }
             }
@@ -125,15 +114,15 @@ int yylex() {
             return keyword_or_id(s);
         }
 
-        // numbers
+        // integer
         if (std::isdigit(c)) {
             long val = c - '0';
             while (true) {
-                int d = getc_wrap();
+                int d = getch();
                 if (std::isdigit(d)) {
                     val = val * 10 + (d - '0');
                 } else {
-                    ungetc_wrap(d);
+                    ungetch(d);
                     break;
                 }
             }
@@ -142,26 +131,38 @@ int yylex() {
             return INTCONST;
         }
 
-        // operators and punctuation
+        // operators and punctuators
         switch (c) {
             case '&': {
-                int d = getc_wrap();
+                int d = getch();
                 if (d == '&') { set_loc(start_col, yycolumn - 1); return AND; }
-                ungetc_wrap(d); break;
+                ungetch(d); break;
             }
             case '|': {
-                int d = getc_wrap();
+                int d = getch();
                 if (d == '|') { set_loc(start_col, yycolumn - 1); return OR; }
-                ungetc_wrap(d); break;
+                ungetch(d); break;
             }
             case '!': {
-                int d = getc_wrap();
+                int d = getch();
                 if (d == '=') { set_loc(start_col, yycolumn - 1); return NE; }
-                ungetc_wrap(d); set_loc(start_col, start_col); return NOT;
+                ungetch(d); set_loc(start_col, start_col); return NOT;
             }
-            case '=': return match_follow('=', EQ, ASSIGN);
-            case '>': return match_follow('=', GE, GT);
-            case '<': return match_follow('=', LE, LT);
+            case '=': {
+                int d = getch();
+                if (d == '=') { set_loc(start_col, yycolumn - 1); return EQ; }
+                ungetch(d); set_loc(start_col, start_col); return ASSIGN;
+            }
+            case '>': {
+                int d = getch();
+                if (d == '=') { set_loc(start_col, yycolumn - 1); return GE; }
+                ungetch(d); set_loc(start_col, start_col); return GT;
+            }
+            case '<': {
+                int d = getch();
+                if (d == '=') { set_loc(start_col, yycolumn - 1); return LE; }
+                ungetch(d); set_loc(start_col, start_col); return LT;
+            }
             case '+': set_loc(start_col, start_col); return PLUS;
             case '-': set_loc(start_col, start_col); return MINUS;
             case '*': set_loc(start_col, start_col); return MUL;

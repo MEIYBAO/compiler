@@ -78,39 +78,8 @@ Value IRBuilder::genExpr(Node* expr) {
                 return {std::to_string(val), true, val};
             }
             std::string t = newTemp();
-            if (op == "&&" || op == "||") {
-                // Short-circuit via cond translation
-                std::string ltrue = newLabel();
-                std::string lfalse = newLabel();
-                std::string lend = newLabel();
-                genCond(expr, ltrue, lfalse);
-                emit("LABEL", "-", "-", ltrue);
-                emit("MOV", "1", "-", t);
-                emit("GOTO", "-", "-", lend);
-                emit("LABEL", "-", "-", lfalse);
-                emit("MOV", "0", "-", t);
-                emit("LABEL", "-", "-", lend);
-            } else if (op == "<" || op == "<=" || op == ">" || op == ">=" || op == "==" || op == "!=") {
-                std::string ltrue = newLabel();
-                std::string lfalse = newLabel();
-                std::string lend = newLabel();
-                genCond(expr, ltrue, lfalse);
-                emit("LABEL", "-", "-", ltrue);
-                emit("MOV", "1", "-", t);
-                emit("GOTO", "-", "-", lend);
-                emit("LABEL", "-", "-", lfalse);
-                emit("MOV", "0", "-", t);
-                emit("LABEL", "-", "-", lend);
-            } else {
-                std::string opName;
-                if (op == "+") opName = "ADD";
-                else if (op == "-") opName = "SUB";
-                else if (op == "*") opName = "MUL";
-                else if (op == "/") opName = "DIV";
-                else if (op == "%") opName = "MOD";
-                else if (op == "^") opName = "POW";
-                emit(opName, a.name, b.name, t);
-            }
+            std::string opName = op; // keep symbolic op
+            emit(opName, a.name, b.name, t);
             return {t, false, 0};
         }
         default:
@@ -119,50 +88,36 @@ Value IRBuilder::genExpr(Node* expr) {
     return {"0", true, 0};
 }
 
-void IRBuilder::genCond(Node* expr, const std::string& ltrue, const std::string& lfalse) {
-    if (!expr) {
-        emit("GOTO", "-", "-", ltrue);
-        return;
-    }
-    if (expr->kind == NodeKind::BinOp) {
-        const std::string& op = expr->text;
-        if (op == "&&") {
-            std::string mid = newLabel();
-            genCond(expr->children[0], mid, lfalse);
-            emit("LABEL", "-", "-", mid);
-            genCond(expr->children[1], ltrue, lfalse);
-            return;
-        }
-        if (op == "||") {
-            std::string mid = newLabel();
-            genCond(expr->children[0], ltrue, mid);
-            emit("LABEL", "-", "-", mid);
-            genCond(expr->children[1], ltrue, lfalse);
-            return;
-        }
-        if (op == "<" || op == "<=" || op == ">" || op == ">=" || op == "==" || op == "!=") {
-            auto a = genExpr(expr->children[0]);
-            auto b = genExpr(expr->children[1]);
-            std::string opName = "IF" + op;
-            emit(opName, a.name, b.name, ltrue);
-            emit("GOTO", "-", "-", lfalse);
-            return;
-        }
-    }
-    auto v = genExpr(expr);
-    emit("IFNZ", v.name, "-", ltrue);
-    emit("GOTO", "-", "-", lfalse);
-}
-
 void IRBuilder::genStmt(Node* stmt) {
     if (!stmt) return;
     switch (stmt->kind) {
-        case NodeKind::Decl:
-            // no code needed for pure declarations
+        case NodeKind::Decl: {
+            // emit code for initializers inside VarList children
+            for (auto* group : stmt->children) {
+                if (group->kind != NodeKind::VarList) continue;
+                for (auto* v : group->children) {
+                    if (v->kind == NodeKind::Assign) {
+                        auto rhs = genExpr(v->children[1]);
+                        emit("=", rhs.name, "-", v->children[0]->text);
+                    }
+                }
+            }
             break;
+        }
         case NodeKind::Assign: {
             auto rhs = genExpr(stmt->children[1]);
-            emit("MOV", rhs.name, "-", stmt->children[0]->text);
+            emit("=", rhs.name, "-", stmt->children[0]->text);
+            break;
+        }
+        case NodeKind::Return: {
+            auto v = genExpr(stmt->children[0]);
+            emit("return", v.name, "-", "-");
+            break;
+        }
+        case NodeKind::Function: {
+            emit("FUNC_BEGIN", stmt->text, "-", "-");
+            if (!stmt->children.empty()) genStmt(stmt->children[0]);
+            emit("FUNC_END", stmt->text, "-", "-");
             break;
         }
         case NodeKind::Print: {
@@ -178,8 +133,8 @@ void IRBuilder::genStmt(Node* stmt) {
             std::string ltrue = newLabel();
             std::string lfalse = newLabel();
             std::string lend = newLabel();
-            genCond(stmt->children[0], ltrue, lfalse);
-            emit("LABEL", "-", "-", ltrue);
+            auto cond = genExpr(stmt->children[0]);
+            emit("JZ", cond.name, "-", lfalse);
             genStmt(stmt->children[1]);
             emit("GOTO", "-", "-", lend);
             emit("LABEL", "-", "-", lfalse);
@@ -194,8 +149,8 @@ void IRBuilder::genStmt(Node* stmt) {
             std::string lbody = newLabel();
             std::string lend = newLabel();
             emit("LABEL", "-", "-", lstart);
-            genCond(stmt->children[0], lbody, lend);
-            emit("LABEL", "-", "-", lbody);
+            auto cond = genExpr(stmt->children[0]);
+            emit("JZ", cond.name, "-", lend);
             genStmt(stmt->children[1]);
             emit("GOTO", "-", "-", lstart);
             emit("LABEL", "-", "-", lend);
@@ -209,11 +164,9 @@ void IRBuilder::genStmt(Node* stmt) {
             genStmt(stmt->children[0]);
             emit("LABEL", "-", "-", lcond);
             if (stmt->children[1]) {
-                genCond(stmt->children[1], lbody, lend);
-            } else {
-                emit("GOTO", "-", "-", lbody);
+                auto cond = genExpr(stmt->children[1]);
+                emit("JZ", cond.name, "-", lend);
             }
-            emit("LABEL", "-", "-", lbody);
             genStmt(stmt->children[3]); // body
             genStmt(stmt->children[2]); // step
             emit("GOTO", "-", "-", lcond);
