@@ -7,16 +7,16 @@
 #include <stdlib.h>
 
 /*
-  ´Ê·¨Êä³ö¸ñÊ½½¨Òé£º
+  è¯æ³•è¾“å‡ºæ ¼å¼å»ºè®®ï¼š
     <TOKEN, lexeme>
-  ·Ç·¨×Ö·û£º
+  éæ³•å­—ç¬¦ï¼š
     <ERRORCHAR, ch> at line:col
 */
 
-static int colno = 1;   // µ±Ç°ÁĞºÅ£¨´Ó 1 ¿ªÊ¼£©
+static int colno = 1;   // å½“å‰åˆ—å·ï¼ˆä» 1 å¼€å§‹ï¼‰
 
 static void update_col(const char* yytext) {
-    // yytext ²»º¬ '\n' µÄÇé¿öÏÂ£¬ÁĞºÅ += yyleng
+    // yytext ä¸å« '\n' çš„æƒ…å†µä¸‹ï¼Œåˆ—å· += yyleng
     colno += (int)strlen(yytext);
 }
 
@@ -34,18 +34,20 @@ static void print_token_int(const char* tok, const char* lexeme, long val) {
 
 %}
 
-/* ---------- ÕıÔò¶¨ÒåÇø ---------- */
+/* ---------- æ­£åˆ™å®šä¹‰åŒº ---------- */
 DIGIT      [0-9]
 LETTER     [A-Za-z_]
 ID         {LETTER}({LETTER}|{DIGIT})*
 INTCONST   {DIGIT}+
+REALCONST  ({DIGIT}+\.{DIGIT}*|{DIGIT}*\.{DIGIT}+)([eE][+-]?{DIGIT}+)?
+SCICONST   {DIGIT}+[eE][+-]?{DIGIT}+
 
 WS         [ \t\r]+
 
-/* ---------- ¹æÔòÇø ---------- */
+/* ---------- è§„åˆ™åŒº ---------- */
 %%
 
-\n              { reset_col(); /* yylineno ×Ô¶¯ +1 */ }
+\n              { reset_col(); /* yylineno è‡ªåŠ¨ +1 */ }
 
 
 {WS}            { update_col(yytext); }
@@ -54,14 +56,19 @@ WS         [ \t\r]+
 "//".*          { update_col(yytext); }
 
 
-"/*"([^*]|\*+[^*/])*\*+"/"   { update_col(yytext); /* ÆäÖĞ¿ÉÄÜº¬ \n£¬´Ë´¦¼òµ¥ÊµÏÖ£º²»ÖğĞĞ¼ÆÁĞ */ }
+"/*"([^*]|\*+[^*/])*\*+"/"   { update_col(yytext); /* å…¶ä¸­å¯èƒ½å« \nï¼Œæ­¤å¤„ç®€å•å®ç°ï¼šä¸é€è¡Œè®¡åˆ— */ }
 
 
 "int"           { print_token("KW_INT", yytext); update_col(yytext); }
+"float"         { print_token("KW_FLOAT", yytext); update_col(yytext); }
+"double"        { print_token("KW_DOUBLE", yytext); update_col(yytext); }
+"void"          { print_token("KW_VOID", yytext); update_col(yytext); }
 "if"            { print_token("KW_IF", yytext); update_col(yytext); }
 "else"          { print_token("KW_ELSE", yytext); update_col(yytext); }
 "while"         { print_token("KW_WHILE", yytext); update_col(yytext); }
 "for"           { print_token("KW_FOR", yytext); update_col(yytext); }
+"return"        { print_token("KW_RETURN", yytext); update_col(yytext); }
+"struct"        { print_token("KW_STRUCT", yytext); update_col(yytext); }
 
 
 "printf"        { print_token("KW_PRINTF", yytext); update_col(yytext); }
@@ -70,6 +77,7 @@ WS         [ \t\r]+
 "&&"            { print_token("AND", yytext); update_col(yytext); }
 "||"            { print_token("OR", yytext);  update_col(yytext); }
 "!"             { print_token("NOT", yytext); update_col(yytext); }
+"->"            { print_token("ARROW", yytext); update_col(yytext); }
 
 
 "=="            { print_token("EQ", yytext);  update_col(yytext); }
@@ -89,6 +97,7 @@ WS         [ \t\r]+
 "/"             { print_token("DIV", yytext);   update_col(yytext); }
 "%"             { print_token("MOD", yytext);   update_col(yytext); }
 "^"             { print_token("POW", yytext);   update_col(yytext); }
+"&"             { print_token("ADDR", yytext);  update_col(yytext); }
 
 
 ";"             { print_token("SEMI", yytext);   update_col(yytext); }
@@ -97,7 +106,22 @@ WS         [ \t\r]+
 ")"             { print_token("RPAREN", yytext); update_col(yytext); }
 "{"             { print_token("LBRACE", yytext); update_col(yytext); }
 "}"             { print_token("RBRACE", yytext); update_col(yytext); }
+"["             { print_token("LBRACKET", yytext); update_col(yytext); }
+"]"             { print_token("RBRACKET", yytext); update_col(yytext); }
+"."             { print_token("DOT", yytext); update_col(yytext); }
 
+
+{REALCONST}     {
+                    double v = strtod(yytext, NULL);
+                    printf("<%s, %s, %g>\n", "REALCONST", yytext, v);
+                    update_col(yytext);
+                }
+
+{SCICONST}      {
+                    double v = strtod(yytext, NULL);
+                    printf("<%s, %s, %g>\n", "REALCONST", yytext, v);
+                    update_col(yytext);
+                }
 
 {INTCONST}      {
                     long v = strtol(yytext, NULL, 10);
@@ -106,19 +130,19 @@ WS         [ \t\r]+
                 }
 
 {ID}            {
-                    /* ¹Ø¼ü×ÖÒÑÔÚÉÏÃæÏÈÆ¥Åä£»×ßµ½ÕâÒ»¶¨ÊÇ±êÊ¶·û */
+                    /* å…³é”®å­—å·²åœ¨ä¸Šé¢å…ˆåŒ¹é…ï¼›èµ°åˆ°è¿™ä¸€å®šæ˜¯æ ‡è¯†ç¬¦ */
                     print_token("ID", yytext);
                     update_col(yytext);
                 }
 
 
 .               {
-                    /* yytext Îªµ¥×Ö·û */
+                    /* yytext ä¸ºå•å­—ç¬¦ */
                     printf("<ERRORCHAR, %s> at %d:%d\n", yytext, yylineno, colno);
                     update_col(yytext);
                 }
 %%
-/* ¹©¶ÀÁ¢²âÊÔ£ºÖ»×ö´Ê·¨·ÖÎö */
+/* ä¾›ç‹¬ç«‹æµ‹è¯•ï¼šåªåšè¯æ³•åˆ†æ */
 int main(int argc, char** argv) {
     if (argc > 1) {
         FILE* f = fopen(argv[1], "rb");

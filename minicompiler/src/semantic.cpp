@@ -1,0 +1,167 @@
+// Semantic checking implementation
+#include "semantic.hpp"
+#include <sstream>
+
+namespace mc {
+
+static std::string posStr(SourcePos p) {
+    std::ostringstream os;
+    os << p.line << ":" << p.col;
+    return os.str();
+}
+
+bool SymbolTable::declare(const std::string& name, const Type& type, SourcePos pos, std::string& err) {
+    if (scopes.empty()) enterScope();
+    auto& current = scopes.back();
+    if (current.count(name)) {
+        std::ostringstream os;
+        os << "Redefinition of " << name << " at " << posStr(pos);
+        err = os.str();
+        return false;
+    }
+    current[name] = Symbol{name, type, pos};
+    return true;
+}
+
+std::optional<Symbol> SymbolTable::lookup(const std::string& name) const {
+    for (auto it = scopes.rbegin(); it != scopes.rend(); ++it) {
+        auto f = it->find(name);
+        if (f != it->end()) return f->second;
+    }
+    return std::nullopt;
+}
+
+static void addError(std::vector<std::string>& errors, const std::string& msg) {
+    errors.push_back(msg);
+}
+
+Type checkExpr(Node* expr, SymbolTable& symtab, std::vector<std::string>& errors) {
+    if (!expr) return {BasicType::Invalid};
+    switch (expr->kind) {
+        case NodeKind::IntLiteral:
+            return {BasicType::Int};
+        case NodeKind::Var: {
+            auto sym = symtab.lookup(expr->text);
+            if (!sym) {
+                addError(errors, "Undeclared identifier '" + expr->text + "' at " + posStr(expr->pos));
+                return {BasicType::Invalid};
+            }
+            return sym->type;
+        }
+        case NodeKind::BinOp: {
+            auto lt = checkExpr(expr->children[0], symtab, errors);
+            auto rt = checkExpr(expr->children[1], symtab, errors);
+            if (lt.base != BasicType::Int || rt.base != BasicType::Int) {
+                addError(errors, "Type mismatch for operator '" + expr->text + "' at " + posStr(expr->pos));
+                return {BasicType::Invalid};
+            }
+            return {BasicType::Int};
+        }
+        case NodeKind::UnOp: {
+            auto t = checkExpr(expr->children[0], symtab, errors);
+            if (t.base != BasicType::Int) {
+                addError(errors, "Type mismatch for operator '" + expr->text + "' at " + posStr(expr->pos));
+                return {BasicType::Invalid};
+            }
+            return {BasicType::Int};
+        }
+        default:
+            return {BasicType::Invalid};
+    }
+}
+
+static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>& errors) {
+    if (!stmt) return;
+    switch (stmt->kind) {
+        case NodeKind::Decl: {
+            for (auto* v : stmt->children) {
+                std::string err;
+                if (!symtab.declare(v->text, {BasicType::Int}, v->pos, err)) {
+                    addError(errors, err);
+                }
+            }
+            break;
+        }
+        case NodeKind::Assign: {
+            auto* lhs = stmt->children[0];
+            auto* rhs = stmt->children[1];
+            auto sym = symtab.lookup(lhs->text);
+            if (!sym) {
+                addError(errors, "Undeclared identifier '" + lhs->text + "' at " + posStr(lhs->pos));
+            } else if (sym->type.base != BasicType::Int) {
+                addError(errors, "Assignment type mismatch for '" + lhs->text + "' at " + posStr(lhs->pos));
+            }
+            auto rt = checkExpr(rhs, symtab, errors);
+            if (rt.base != BasicType::Int) {
+                addError(errors, "Right-hand side type mismatch at " + posStr(rhs->pos));
+            }
+            break;
+        }
+        case NodeKind::If: {
+            checkExpr(stmt->children[0], symtab, errors);
+            symtab.enterScope();
+            checkStmt(stmt->children[1], symtab, errors);
+            symtab.leaveScope();
+            if (stmt->children.size() > 2) {
+                symtab.enterScope();
+                checkStmt(stmt->children[2], symtab, errors);
+                symtab.leaveScope();
+            }
+            break;
+        }
+        case NodeKind::While: {
+            checkExpr(stmt->children[0], symtab, errors);
+            symtab.enterScope();
+            checkStmt(stmt->children[1], symtab, errors);
+            symtab.leaveScope();
+            break;
+        }
+        case NodeKind::For: {
+            symtab.enterScope();
+            checkStmt(stmt->children[0], symtab, errors);  // init
+            checkExpr(stmt->children[1], symtab, errors);  // cond
+            checkStmt(stmt->children[2], symtab, errors);  // step
+            checkStmt(stmt->children[3], symtab, errors);  // body
+            symtab.leaveScope();
+            break;
+        }
+        case NodeKind::Print: {
+            checkExpr(stmt->children[0], symtab, errors);
+            break;
+        }
+        case NodeKind::Scan: {
+            auto sym = symtab.lookup(stmt->children[0]->text);
+            if (!sym) {
+                addError(errors, "Undeclared identifier '" + stmt->children[0]->text + "' at " +
+                                  posStr(stmt->children[0]->pos));
+            }
+            break;
+        }
+        case NodeKind::Block:
+        case NodeKind::StmtList: {
+            symtab.enterScope();
+            for (auto* child : stmt->children) {
+                checkStmt(child, symtab, errors);
+            }
+            symtab.leaveScope();
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+void semanticCheck(Node* root, std::vector<std::string>& errors, SymbolTable& symtab) {
+    if (!root) return;
+    if (root->kind != NodeKind::Program) {
+        addError(errors, "Root is not a Program node");
+        return;
+    }
+    symtab.enterScope();
+    for (auto* child : root->children) {
+        checkStmt(child, symtab, errors);
+    }
+    symtab.leaveScope();
+}
+
+}  // namespace mc
