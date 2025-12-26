@@ -35,6 +35,15 @@ static void addError(std::vector<std::string>& errors, const std::string& msg) {
     errors.push_back(msg);
 }
 
+static bool requireInt(Type t, SourcePos p, const std::string& ctx, std::vector<std::string>& errors) {
+    if (t.base == BasicType::Invalid) return false;
+    if (t.base != BasicType::Int) {
+        addError(errors, ctx + " expects int at " + posStr(p));
+        return false;
+    }
+    return true;
+}
+
 Type checkExpr(Node* expr, SymbolTable& symtab, std::vector<std::string>& errors) {
     if (!expr) return {BasicType::Invalid};
     switch (expr->kind) {
@@ -135,7 +144,8 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
         }
         case NodeKind::Return: {
             if (!stmt->children.empty()) {
-                checkExpr(stmt->children[0], symtab, errors);
+                auto t = checkExpr(stmt->children[0], symtab, errors);
+                requireInt(t, stmt->children[0]->pos, "Return value", errors);
             }
             break;
         }
@@ -148,7 +158,8 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
             break;
         }
         case NodeKind::If: {
-            checkExpr(stmt->children[0], symtab, errors);
+            auto t = checkExpr(stmt->children[0], symtab, errors);
+            requireInt(t, stmt->children[0]->pos, "If condition", errors);
             symtab.enterScope();
             checkStmt(stmt->children[1], symtab, errors);
             symtab.leaveScope();
@@ -160,7 +171,8 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
             break;
         }
         case NodeKind::While: {
-            checkExpr(stmt->children[0], symtab, errors);
+            auto t = checkExpr(stmt->children[0], symtab, errors);
+            requireInt(t, stmt->children[0]->pos, "While condition", errors);
             symtab.enterScope();
             checkStmt(stmt->children[1], symtab, errors);
             symtab.leaveScope();
@@ -169,14 +181,18 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
         case NodeKind::For: {
             symtab.enterScope();
             checkStmt(stmt->children[0], symtab, errors);  // init
-            checkExpr(stmt->children[1], symtab, errors);  // cond
+            if (stmt->children[1]) {
+                auto t = checkExpr(stmt->children[1], symtab, errors);  // cond
+                requireInt(t, stmt->children[1]->pos, "For condition", errors);
+            }
             checkStmt(stmt->children[2], symtab, errors);  // step
             checkStmt(stmt->children[3], symtab, errors);  // body
             symtab.leaveScope();
             break;
         }
         case NodeKind::Print: {
-            checkExpr(stmt->children[0], symtab, errors);
+            auto t = checkExpr(stmt->children[0], symtab, errors);
+            requireInt(t, stmt->children[0]->pos, "printf argument", errors);
             break;
         }
         case NodeKind::Scan: {

@@ -1,6 +1,7 @@
 // Basic optimizations: constant folding and dead code elimination
 #include "optimizer.hpp"
 #include <unordered_set>
+#include <unordered_map>
 #include <regex>
 #include <cmath>
 
@@ -120,16 +121,74 @@ void deadCodeEliminate(std::vector<Quad>& code) {
 }
 
 void simplifyControl(std::vector<Quad>& code) {
-    std::vector<Quad> out;
-    out.reserve(code.size());
-    for (size_t i = 0; i < code.size(); ++i) {
-        const auto& q = code[i];
-        if (q.op == "GOTO" && i + 1 < code.size() && code[i + 1].op == "LABEL" && code[i + 1].res == q.res) {
-            continue; // skip jump to immediately following label
-        }
-        out.push_back(q);
+    // 1) eliminate redundant moves (x = x)
+    std::vector<Quad> tmp;
+    tmp.reserve(code.size());
+    for (const auto& q : code) {
+        if ((q.op == "=" || q.op == "MOV") && q.arg1 == q.res) continue;
+        tmp.push_back(q);
     }
-    code.swap(out);
+    code.swap(tmp);
+
+    // 2) merge consecutive labels and redirect jumps
+    std::unordered_map<std::string, std::string> alias;
+    std::vector<Quad> merged;
+    merged.reserve(code.size());
+    std::string lastLabel;
+    bool prevWasLabel = false;
+    for (const auto& q : code) {
+        if (q.op == "LABEL") {
+            if (prevWasLabel) {
+                alias[q.res] = lastLabel;
+                continue;
+            }
+            lastLabel = q.res;
+            prevWasLabel = true;
+            merged.push_back(q);
+        } else {
+            prevWasLabel = false;
+            merged.push_back(q);
+        }
+    }
+    auto resolve = [&](const std::string& lbl) -> std::string {
+        auto it = alias.find(lbl);
+        if (it == alias.end()) return lbl;
+        return it->second;
+    };
+    for (auto& q : merged) {
+        if (q.op == "GOTO" || q.op == "JZ" || q.op.rfind("IF", 0) == 0) {
+            q.res = resolve(q.res);
+        }
+    }
+
+    // 3) drop jumps that fall through immediately
+    std::vector<Quad> noFall;
+    noFall.reserve(merged.size());
+    for (size_t i = 0; i < merged.size(); ++i) {
+        const auto& q = merged[i];
+        if (q.op == "GOTO" && i + 1 < merged.size() && merged[i + 1].op == "LABEL" && merged[i + 1].res == q.res) {
+            continue;
+        }
+        noFall.push_back(q);
+    }
+
+    // 4) remove unreachable code until next label after unconditional jump
+    std::vector<Quad> reachable;
+    reachable.reserve(noFall.size());
+    bool skip = false;
+    for (const auto& q : noFall) {
+        if (q.op == "LABEL") {
+            skip = false;
+            reachable.push_back(q);
+            continue;
+        }
+        if (skip) continue;
+        reachable.push_back(q);
+        if (q.op == "GOTO") {
+            skip = true;
+        }
+    }
+    code.swap(reachable);
 }
 
 static bool isPure(const Quad& q) {
