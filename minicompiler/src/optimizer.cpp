@@ -206,17 +206,23 @@ void copyPropagate(std::vector<Quad>& code) {
     };
     for (auto& q : code) {
         // rewrite args
-        if (q.op != "LABEL") {
-            if (q.arg1 != "-" ) q.arg1 = resolve(q.arg1);
-            if (q.arg2 != "-" ) q.arg2 = resolve(q.arg2);
+        if (q.op == "LABEL") {
+            rep.clear(); // new basic block, drop mappings
+        } else {
+            if (q.arg1 != "-") q.arg1 = resolve(q.arg1);
+            if (q.arg2 != "-") q.arg2 = resolve(q.arg2);
         }
+        // READ writes to arg1 (res is "-"), so kill it explicitly
+        if (q.op == "READ" && q.arg1 != "-") rep.erase(q.arg1);
         // kill mapping if we assign
-        if (q.res != "-" && !q.res.empty()) {
-            rep.erase(q.res);
-        }
+        if (q.res != "-" && !q.res.empty()) rep.erase(q.res);
         // add mapping for copy
         if ((q.op == "MOV" || q.op == "=") && q.res != "-" && q.arg1 != "-") {
             rep[q.res] = resolve(q.arg1);
+        }
+        // after control-flow edges, drop mappings to avoid leaking across branches/loops
+        if (q.op == "GOTO" || q.op == "JZ" || q.op.rfind("IF", 0) == 0 || q.op == "return" || q.op == "RETURN") {
+            rep.clear();
         }
     }
 }
