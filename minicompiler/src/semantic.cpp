@@ -15,7 +15,7 @@ bool SymbolTable::declare(const std::string& name, const Type& type, SourcePos p
     auto& current = scopes.back();
     if (current.count(name)) {
         std::ostringstream os;
-        os << "Redefinition of " << name << " at " << posStr(pos);
+        os << "变量重定义 '" << name << "'，位置 " << posStr(pos);
         err = os.str();
         return false;
     }
@@ -38,7 +38,7 @@ static void addError(std::vector<std::string>& errors, const std::string& msg) {
 static bool requireInt(Type t, SourcePos p, const std::string& ctx, std::vector<std::string>& errors) {
     if (t.base == BasicType::Invalid) return false;
     if (t.base != BasicType::Int) {
-        addError(errors, ctx + " expects int at " + posStr(p));
+        addError(errors, ctx + " 需要 int，位置 " + posStr(p));
         return false;
     }
     return true;
@@ -52,7 +52,7 @@ Type checkExpr(Node* expr, SymbolTable& symtab, std::vector<std::string>& errors
         case NodeKind::Var: {
             auto sym = symtab.lookup(expr->text);
             if (!sym) {
-                addError(errors, "Undeclared identifier '" + expr->text + "' at " + posStr(expr->pos));
+                addError(errors, "未声明的标识符 '" + expr->text + "'，位置 " + posStr(expr->pos));
                 return {BasicType::Invalid};
             }
             return sym->type;
@@ -115,11 +115,11 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
                             auto* rhs = v->children[1];
                             auto sym = symtab.lookup(lhs->text);
                             if (!sym) {
-                                addError(errors, "Undeclared identifier '" + lhs->text + "' at " + posStr(lhs->pos));
+                                addError(errors, "未声明的标识符 '" + lhs->text + "'，位置 " + posStr(lhs->pos));
                             }
                             auto rt = checkExpr(rhs, symtab, errors);
                             if (rt.base != BasicType::Int) {
-                                addError(errors, "Type mismatch for initializer at " + posStr(rhs->pos));
+                                addError(errors, "初始化类型不匹配，位置 " + posStr(rhs->pos));
                             }
                         }
                     }
@@ -132,20 +132,20 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
             auto* rhs = stmt->children[1];
             auto sym = symtab.lookup(lhs->text);
             if (!sym) {
-                addError(errors, "Undeclared identifier '" + lhs->text + "' at " + posStr(lhs->pos));
+                addError(errors, "未声明的标识符 '" + lhs->text + "'，位置 " + posStr(lhs->pos));
             } else if (sym->type.base != BasicType::Int) {
-                addError(errors, "Assignment type mismatch for '" + lhs->text + "' at " + posStr(lhs->pos));
+                addError(errors, "赋值类型不匹配 '" + lhs->text + "'，位置 " + posStr(lhs->pos));
             }
             auto rt = checkExpr(rhs, symtab, errors);
             if (rt.base != BasicType::Int) {
-                addError(errors, "Right-hand side type mismatch at " + posStr(rhs->pos));
+                addError(errors, "右值类型不匹配，位置 " + posStr(rhs->pos));
             }
             break;
         }
         case NodeKind::Return: {
             if (!stmt->children.empty()) {
                 auto t = checkExpr(stmt->children[0], symtab, errors);
-                requireInt(t, stmt->children[0]->pos, "Return value", errors);
+                requireInt(t, stmt->children[0]->pos, "返回值", errors);
             }
             break;
         }
@@ -159,7 +159,7 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
         }
         case NodeKind::If: {
             auto t = checkExpr(stmt->children[0], symtab, errors);
-            requireInt(t, stmt->children[0]->pos, "If condition", errors);
+            requireInt(t, stmt->children[0]->pos, "if 条件", errors);
             symtab.enterScope();
             checkStmt(stmt->children[1], symtab, errors);
             symtab.leaveScope();
@@ -172,7 +172,7 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
         }
         case NodeKind::While: {
             auto t = checkExpr(stmt->children[0], symtab, errors);
-            requireInt(t, stmt->children[0]->pos, "While condition", errors);
+            requireInt(t, stmt->children[0]->pos, "while 条件", errors);
             symtab.enterScope();
             checkStmt(stmt->children[1], symtab, errors);
             symtab.leaveScope();
@@ -183,7 +183,7 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
             checkStmt(stmt->children[0], symtab, errors);  // init
             if (stmt->children[1]) {
                 auto t = checkExpr(stmt->children[1], symtab, errors);  // cond
-                requireInt(t, stmt->children[1]->pos, "For condition", errors);
+                requireInt(t, stmt->children[1]->pos, "for 条件", errors);
             }
             checkStmt(stmt->children[2], symtab, errors);  // step
             checkStmt(stmt->children[3], symtab, errors);  // body
@@ -192,13 +192,13 @@ static void checkStmt(Node* stmt, SymbolTable& symtab, std::vector<std::string>&
         }
         case NodeKind::Print: {
             auto t = checkExpr(stmt->children[0], symtab, errors);
-            requireInt(t, stmt->children[0]->pos, "printf argument", errors);
+            requireInt(t, stmt->children[0]->pos, "printf 参数", errors);
             break;
         }
         case NodeKind::Scan: {
             auto sym = symtab.lookup(stmt->children[0]->text);
             if (!sym) {
-                addError(errors, "Undeclared identifier '" + stmt->children[0]->text + "' at " +
+                addError(errors, "未声明的标识符 '" + stmt->children[0]->text + "'，位置 " +
                                   posStr(stmt->children[0]->pos));
             }
             break;

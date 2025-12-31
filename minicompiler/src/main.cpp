@@ -194,6 +194,13 @@ int main(int argc, char** argv) {
         std::cout << "类型检查通过\n";
     }
 
+    std::cout << "\n错误分析:\n";
+    if (!semErrors.empty()) {
+        std::cout << "发现 " << semErrors.size() << " 个语义/类型错误，详见上述列表。\n";
+    } else {
+        std::cout << "未发现语义/类型错误。\n";
+    }
+
     auto asmLines = mc::toAssembly(optimized);
     std::cout << "\n目标代码（x86汇编）：\n";
     for (auto& line : asmLines) std::cout << line << "\n";

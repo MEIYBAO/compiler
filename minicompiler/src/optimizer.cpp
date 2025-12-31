@@ -196,16 +196,15 @@ void deadCodeEliminate(std::vector<Quad>& code) {
     for (auto it = code.rbegin(); it != code.rend(); ++it) {
         const auto& q = *it;
         if (q.op == "LABEL") {
-            // boundary of basic block: be conservative, keep label and reset liveness
+            // keep label; do not clear liveness so backward uses across blocks are preserved
             kept.push_back(q);
-            live.clear();
             continue;
         }
 
         bool remove = false;
-        if (isPureOp(q) && !isSideEffect(q) && !q.res.empty() && q.res != "-") {
+        if (isPureOp(q) && !isSideEffect(q) && !q.res.empty() && q.res != "-" && q.res.rfind("t", 0) == 0) {
             if (live.find(q.res) == live.end()) {
-                remove = true; // dead store
+                remove = true; // dead temp
             }
         }
 
