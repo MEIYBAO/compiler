@@ -111,8 +111,7 @@ void constantFold(std::vector<Quad>& code) {
 
     for (auto& q : code) {
         if (q.op == "LABEL") {
-            constEnv.clear();
-            continue;
+            // do not clear env; allow straight-line consts to flow across labels
         }
 
         // substitute known constants
@@ -157,10 +156,7 @@ void constantFold(std::vector<Quad>& code) {
             if (producedConst) constEnv[q.res] = val;
             else constEnv.erase(q.res);
         }
-        if (q.op == "GOTO" || q.op == "JZ" || q.op.rfind("IF", 0) == 0 ||
-            q.op == "return" || q.op == "RETURN") {
-            constEnv.clear();
-        }
+        // keep env across jumps to allow aggressive const propagation in straight-line code
     }
 
     // remove NOPs
@@ -171,6 +167,44 @@ void constantFold(std::vector<Quad>& code) {
         cleaned.push_back(q);
     }
     code.swap(cleaned);
+}
+
+// Global constant propagation for variables assigned once from an immediate
+void globalConstProp(std::vector<Quad>& code) {
+    std::unordered_map<std::string, std::string> constMap;
+    std::unordered_set<std::string> banned;
+    auto isConstAssign = [](const Quad& q) {
+        long long tmp;
+        return (q.op == "=" || q.op == "MOV") && q.res != "-" && !q.res.empty() &&
+               isImm(q.arg1, tmp);
+    };
+
+    // First pass: collect constant-only vars
+    for (const auto& q : code) {
+        if (q.op == "READ") {
+            if (q.arg1 != "-") banned.insert(q.arg1);
+            continue;
+        }
+        if (q.res != "-" && !q.res.empty()) {
+            if (banned.count(q.res)) continue;
+            if (isConstAssign(q) && q.res.rfind("t", 0) != 0) {
+                constMap[q.res] = q.arg1;
+            } else {
+                constMap.erase(q.res);
+                banned.insert(q.res);
+            }
+        }
+    }
+
+    // Second pass: substitute uses
+    auto replace = [&](std::string& s) {
+        auto it = constMap.find(s);
+        if (it != constMap.end()) s = it->second;
+    };
+    for (auto& q : code) {
+        replace(q.arg1);
+        replace(q.arg2);
+    }
 }
 
 void deadCodeEliminate(std::vector<Quad>& code) {
@@ -202,9 +236,9 @@ void deadCodeEliminate(std::vector<Quad>& code) {
         }
 
         bool remove = false;
-        if (isPureOp(q) && !isSideEffect(q) && !q.res.empty() && q.res != "-" && q.res.rfind("t", 0) == 0) {
+        if (isPureOp(q) && !isSideEffect(q) && !q.res.empty() && q.res != "-") {
             if (live.find(q.res) == live.end()) {
-                remove = true; // dead temp
+                remove = true; // dead store
             }
         }
 

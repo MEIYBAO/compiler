@@ -17,10 +17,8 @@ int main() {
     // 输入输出：读取一个值并打印若干结果
     scanf(f);               // 读入到 f
     printf(c);              // 7
-    printf(d);              // 9
-    printf(e);              // 1
     printf(f);              // 用户输入
-    printf(a + b * f);      // 组合算术
+    printf(c * f);      // 组合算术
 
     // 关系与逻辑运算：==, !=, >, <, >=, <=, &&, ||, !
     if ((a < b && d >= c) || !(e == 0)) {

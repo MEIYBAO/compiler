@@ -176,6 +176,7 @@ int main(int argc, char** argv) {
 
     auto optimized = builder.code;
     mc::constantFold(optimized);
+    mc::globalConstProp(optimized);
     mc::strengthReduce(optimized);
     mc::copyPropagate(optimized);
     mc::commonSubexprElim(optimized);

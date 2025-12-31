@@ -5,6 +5,7 @@
 namespace mc {
 
 void constantFold(std::vector<Quad>& code);
+void globalConstProp(std::vector<Quad>& code);
 void strengthReduce(std::vector<Quad>& code);
 void deadCodeEliminate(std::vector<Quad>& code);
 void simplifyControl(std::vector<Quad>& code);

@@ -53,9 +53,38 @@ Value IRBuilder::genExpr(Node* expr) {
             break;
         }
         case NodeKind::BinOp: {
+            const std::string& op = expr->text;
+            if (op == "&&" || op == "||") {
+                auto a = genExpr(expr->children[0]);
+                std::string t = newTemp();
+                std::string lshort = newLabel();
+                std::string lend = newLabel();
+                if (op == "&&") {
+                    emit("MOV", "0", "-", t);               // default false
+                    emit("JZ", a.name, "-", lshort);        // left false -> short
+                    auto b = genExpr(expr->children[1]);    // only eval when left true
+                    emit("JZ", b.name, "-", lshort);        // right false -> short
+                    emit("MOV", "1", "-", t);               // both true
+                    emit("GOTO", "-", "-", lend);
+                    emit("LABEL", "-", "-", lshort);
+                    emit("MOV", "0", "-", t);
+                    emit("LABEL", "-", "-", lend);
+                } else { // ||
+                    emit("MOV", "1", "-", t);               // default true
+                    emit("JZ", a.name, "-", lshort);        // if left false, need right
+                    emit("GOTO", "-", "-", lend);           // left true -> short to true
+                    emit("LABEL", "-", "-", lshort);
+                    auto b = genExpr(expr->children[1]);    // eval right only if needed
+                    emit("JZ", b.name, "-", lshort + "_f"); // if right false -> go set false
+                    emit("GOTO", "-", "-", lend);           // right true -> keep 1
+                    emit("LABEL", "-", "-", lshort + "_f");
+                    emit("MOV", "0", "-", t);
+                    emit("LABEL", "-", "-", lend);
+                }
+                return {t, false, 0};
+            }
             auto a = genExpr(expr->children[0]);
             auto b = genExpr(expr->children[1]);
-            const std::string& op = expr->text;
             auto compute = [&](long long x, long long y) -> long long {
                 if (op == "+") return x + y;
                 if (op == "-") return x - y;
