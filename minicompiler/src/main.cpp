@@ -4,6 +4,7 @@
 #include <string>
 #include <cstdio>
 #include <iomanip>
+#include <fstream>
 #include "parser.hpp"
 #include "ast.hpp"
 #include "semantic.hpp"
@@ -147,7 +148,17 @@ int main(int argc, char** argv) {
     std::cout << "\xEF\xBB\xBF"; // UTF-8 BOM for Windows editors
     yylineno = 1;
     yycolumn = 1;
+    std::string asmPath = "output.asm";
     if (argc > 1) {
+        std::string inputPath = argv[1];
+        size_t slash = inputPath.find_last_of("/\\");
+        std::string dir = (slash == std::string::npos) ? "" : inputPath.substr(0, slash + 1);
+        std::string base = (slash == std::string::npos) ? inputPath : inputPath.substr(slash + 1);
+        size_t dot = base.find_last_of('.');
+        if (dot != std::string::npos) {
+            base = base.substr(0, dot);
+        }
+        asmPath = dir + base + ".asm";
         dumpTokens(argv[1]);
         yyin = fopen(argv[1], "rb");
         if (!yyin) {
@@ -205,6 +216,15 @@ int main(int argc, char** argv) {
     auto asmLines = mc::toAssembly(optimized);
     std::cout << "\n目标代码（x86汇编）：\n";
     for (auto& line : asmLines) std::cout << line << "\n";
+
+    std::ofstream asmFile(asmPath, std::ios::binary);
+    if (asmFile) {
+        for (const auto& line : asmLines) {
+            asmFile << line << "\n";
+        }
+    } else {
+        std::cerr << "Failed to write assembly file to " << asmPath << "\n";
+    }
 
     mc::freeAst(g_root);
     return 0;
