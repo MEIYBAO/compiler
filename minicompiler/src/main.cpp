@@ -167,16 +167,6 @@ int main(int argc, char** argv) {
     mc::SymbolTable symtab;
     std::vector<std::string> semErrors;
     mc::semanticCheck(g_root, semErrors, symtab);
-    std::cout << "\nTypeChecker (basic types: int, void, string)\n";
-    std::cout << "Checks: declarations, type matching, operator types; scope: redeclare, undeclared use\n";
-    std::cout << "\n语义分析：\n";
-    if (!semErrors.empty()) {
-        for (auto& e : semErrors) std::cout << e << "\n";
-        std::cout << "Type check failed (" << semErrors.size() << " issue" << (semErrors.size() > 1 ? "s" : "") << ")\n";
-    } else {
-        std::cout << "无语义错误\n";
-        std::cout << "Type check passed\n";
-    }
 
     mc::IRBuilder builder;
     builder.gen(g_root);
@@ -196,8 +186,16 @@ int main(int argc, char** argv) {
     std::cout << "\n优化后中间代码：\n";
     dumpIR(optimized);
 
+    std::cout << "\n类型检查:\n";
+    if (!semErrors.empty()) {
+        for (auto& e : semErrors) std::cout << e << "\n";
+        std::cout << "类型检查未通过\n";
+    } else {
+        std::cout << "类型检查通过\n";
+    }
+
     auto asmLines = mc::toAssembly(optimized);
-    std::cout << "\n伪汇编：\n";
+    std::cout << "\n目标代码（x86汇编）：\n";
     for (auto& line : asmLines) std::cout << line << "\n";
 
     mc::freeAst(g_root);

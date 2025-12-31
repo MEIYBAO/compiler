@@ -203,9 +203,9 @@ void deadCodeEliminate(std::vector<Quad>& code) {
         }
 
         bool remove = false;
-        if (isPureOp(q) && !isSideEffect(q) && !q.res.empty() && q.res != "-" && q.res.rfind("t", 0) == 0) {
+        if (isPureOp(q) && !isSideEffect(q) && !q.res.empty() && q.res != "-") {
             if (live.find(q.res) == live.end()) {
-                remove = true; // dead temp assignment
+                remove = true; // dead store
             }
         }
 
