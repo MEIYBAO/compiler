@@ -67,6 +67,7 @@ static const char* tokenName(int t) {
         case KW_FOR: return "for";
         case KW_PRINTF: return "printf";
         case KW_SCANF: return "scanf";
+        case KW_RETURN: return "return";
         case PLUS: return "+";
         case MINUS: return "-";
         case MUL: return "*";
@@ -96,7 +97,7 @@ static const char* tokenName(int t) {
 static const char* tokenCategory(int t) {
     switch (t) {
         case KW_INT: case KW_IF: case KW_ELSE: case KW_WHILE: case KW_FOR:
-        case KW_PRINTF: case KW_SCANF:
+        case KW_PRINTF: case KW_SCANF: case KW_RETURN:
             return "关键字";
         case ID:
             return "标识符";
