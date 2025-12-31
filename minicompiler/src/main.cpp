@@ -167,11 +167,15 @@ int main(int argc, char** argv) {
     mc::SymbolTable symtab;
     std::vector<std::string> semErrors;
     mc::semanticCheck(g_root, semErrors, symtab);
+    std::cout << "\nTypeChecker (basic types: int, void, string)\n";
+    std::cout << "Checks: declarations, type matching, operator types; scope: redeclare, undeclared use\n";
     std::cout << "\n语义分析：\n";
     if (!semErrors.empty()) {
         for (auto& e : semErrors) std::cout << e << "\n";
+        std::cout << "Type check failed (" << semErrors.size() << " issue" << (semErrors.size() > 1 ? "s" : "") << ")\n";
     } else {
         std::cout << "无语义错误\n";
+        std::cout << "Type check passed\n";
     }
 
     mc::IRBuilder builder;

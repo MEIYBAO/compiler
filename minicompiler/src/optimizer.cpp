@@ -18,6 +18,8 @@ static bool isImm(const std::string& s, long long& v) {
     }
 }
 
+static bool isPure(const Quad& q);
+
 // Strength reduction / algebraic simplifications that keep existing op set
 void strengthReduce(std::vector<Quad>& code) {
     auto isZero = [](const std::string& s) {
