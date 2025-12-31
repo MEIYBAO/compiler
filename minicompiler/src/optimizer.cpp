@@ -18,6 +18,51 @@ static bool isImm(const std::string& s, long long& v) {
     }
 }
 
+// Strength reduction / algebraic simplifications that keep existing op set
+void strengthReduce(std::vector<Quad>& code) {
+    auto isZero = [](const std::string& s) {
+        long long v = 0;
+        return isImm(s, v) && v == 0;
+    };
+    auto isOne = [](const std::string& s) {
+        long long v = 0;
+        return isImm(s, v) && v == 1;
+    };
+
+    for (auto& q : code) {
+        if (q.res == "-" || q.res.empty()) continue;
+        const std::string& a = q.arg1;
+        const std::string& b = q.arg2;
+        if (q.op == "+") {
+            if (isZero(a)) { q.op = "MOV"; q.arg1 = b; q.arg2 = "-"; }
+            else if (isZero(b)) { q.op = "MOV"; q.arg1 = a; q.arg2 = "-"; }
+        } else if (q.op == "-") {
+            if (isZero(b)) { q.op = "MOV"; q.arg1 = a; q.arg2 = "-"; }
+        } else if (q.op == "*") {
+            if (isZero(a) || isZero(b)) { q.op = "MOV"; q.arg1 = "0"; q.arg2 = "-"; }
+            else if (isOne(a)) { q.op = "MOV"; q.arg1 = b; q.arg2 = "-"; }
+            else if (isOne(b)) { q.op = "MOV"; q.arg1 = a; q.arg2 = "-"; }
+        } else if (q.op == "/") {
+            if (isOne(b)) { q.op = "MOV"; q.arg1 = a; q.arg2 = "-"; }
+            else if (isZero(a)) { q.op = "MOV"; q.arg1 = "0"; q.arg2 = "-"; }
+        } else if (q.op == "%") {
+            if (isOne(b) || isZero(a)) { q.op = "MOV"; q.arg1 = "0"; q.arg2 = "-"; }
+        } else if (q.op == "^") {
+            if (isZero(b)) { q.op = "MOV"; q.arg1 = "1"; q.arg2 = "-"; }
+            else if (isOne(b)) { q.op = "MOV"; q.arg1 = a; q.arg2 = "-"; }
+            else if (isOne(a)) { q.op = "MOV"; q.arg1 = "1"; q.arg2 = "-"; }
+        } else if (q.op == "&&") {
+            if (isZero(a) || isZero(b)) { q.op = "MOV"; q.arg1 = "0"; q.arg2 = "-"; }
+            else if (isOne(a)) { q.op = "MOV"; q.arg1 = b; q.arg2 = "-"; }
+            else if (isOne(b)) { q.op = "MOV"; q.arg1 = a; q.arg2 = "-"; }
+        } else if (q.op == "||") {
+            if (isOne(a) || isOne(b)) { q.op = "MOV"; q.arg1 = "1"; q.arg2 = "-"; }
+            else if (isZero(a)) { q.op = "MOV"; q.arg1 = b; q.arg2 = "-"; }
+            else if (isZero(b)) { q.op = "MOV"; q.arg1 = a; q.arg2 = "-"; }
+        }
+    }
+}
+
 static std::string compute(const Quad& q, bool& ok) {
     ok = false;
     long long a, b;
@@ -53,24 +98,45 @@ static std::string compute(const Quad& q, bool& ok) {
 }
 
 void constantFold(std::vector<Quad>& code) {
+    std::unordered_map<std::string, std::string> constEnv; // var -> const string
+
+    auto resolveConst = [&](std::string& s) {
+        long long tmp = 0;
+        if (isImm(s, tmp)) return;
+        auto it = constEnv.find(s);
+        if (it != constEnv.end()) s = it->second;
+    };
+
     for (auto& q : code) {
+        if (q.op == "LABEL") {
+            constEnv.clear();
+            continue;
+        }
+
+        // substitute known constants
+        if (q.op != "READ") {
+            resolveConst(q.arg1);
+            resolveConst(q.arg2);
+        }
+
         bool ok = false;
         std::string val = compute(q, ok);
+        bool producedConst = false;
+
         if (ok && (q.op.rfind("IF", 0) != 0) && q.op != "JZ") {
             q.op = "MOV";
             q.arg1 = val;
             q.arg2 = "-";
+            producedConst = true;
         } else if (ok && q.op == "JZ") {
-            // if condition const
             if (val == "0") {
-                // always jump -> keep as GOTO
                 q.op = "GOTO";
                 q.arg1 = "-";
                 q.arg2 = "-";
-                // res is label
             } else {
-                q.op = "NOP"; // never jump
+                q.op = "NOP";
             }
+            constEnv.clear();
         } else if (ok && q.op.rfind("IF", 0) == 0) {
             if (val == "1") {
                 q.op = "GOTO";
@@ -78,8 +144,23 @@ void constantFold(std::vector<Quad>& code) {
             } else {
                 q.op = "NOP";
             }
+            constEnv.clear();
+        }
+
+        // env maintenance
+        if (q.op == "READ") {
+            if (q.arg1 != "-") constEnv.erase(q.arg1);
+        }
+        if (q.res != "-" && !q.res.empty()) {
+            if (producedConst) constEnv[q.res] = val;
+            else constEnv.erase(q.res);
+        }
+        if (q.op == "GOTO" || q.op == "JZ" || q.op.rfind("IF", 0) == 0 ||
+            q.op == "return" || q.op == "RETURN") {
+            constEnv.clear();
         }
     }
+
     // remove NOPs
     std::vector<Quad> cleaned;
     cleaned.reserve(code.size());
@@ -91,32 +172,55 @@ void constantFold(std::vector<Quad>& code) {
 }
 
 void deadCodeEliminate(std::vector<Quad>& code) {
-    std::unordered_set<std::string> used;
-    for (const auto& q : code) {
-        auto mark = [&](const std::string& s) {
-            long long tmp;
-            if (s == "-" || isImm(s, tmp)) return;
-            used.insert(s);
-        };
-        if (q.op == "LABEL") continue;
-        mark(q.arg1);
-        mark(q.arg2);
-        if (q.op.rfind("IF", 0) == 0 || q.op == "GOTO" || q.op == "READ" || q.op == "WRITE") {
-            mark(q.res);
-        }
-    }
+    std::unordered_set<std::string> live;
+    auto addLive = [&](const std::string& s) {
+        long long tmp;
+        if (s == "-" || isImm(s, tmp)) return;
+        live.insert(s);
+    };
+    auto isPureOp = [&](const Quad& q) {
+        return q.op == "=" || q.op == "MOV" || isPure(q);
+    };
+    auto isControl = [&](const Quad& q) {
+        return q.op == "GOTO" || q.op == "JZ" || q.op.rfind("IF", 0) == 0;
+    };
+    auto isSideEffect = [&](const Quad& q) {
+        return q.op == "READ" || q.op == "WRITE" || isControl(q) || q.op == "return" || q.op == "RETURN";
+    };
+
     std::vector<Quad> kept;
     kept.reserve(code.size());
-    for (const auto& q : code) {
-        if (q.res.rfind("t", 0) == 0 && used.find(q.res) == used.end() &&
-            (q.op == "=" || q.op == "MOV" || q.op == "+" || q.op == "-" || q.op == "*" ||
-             q.op == "/" || q.op == "%" || q.op == "^" || q.op == "NEG" || q.op == "NOT" ||
-             q.op == "&&" || q.op == "||" || q.op == "<" || q.op == "<=" || q.op == ">" ||
-             q.op == ">=" || q.op == "==" || q.op == "!=")) {
-            continue; // dead temp
+
+    for (auto it = code.rbegin(); it != code.rend(); ++it) {
+        const auto& q = *it;
+        if (q.op == "LABEL") {
+            // boundary of basic block: be conservative, keep label and reset liveness
+            kept.push_back(q);
+            live.clear();
+            continue;
         }
-        kept.push_back(q);
+
+        bool remove = false;
+        if (isPureOp(q) && !isSideEffect(q) && !q.res.empty() && q.res != "-" && q.res.rfind("t", 0) == 0) {
+            if (live.find(q.res) == live.end()) {
+                remove = true; // dead temp assignment
+            }
+        }
+
+        if (!remove) {
+            kept.push_back(q);
+            // update liveness: kill def, add uses
+            live.erase(q.res);
+            addLive(q.arg1);
+            addLive(q.arg2);
+            // branches/IO: result may be a target/param, keep it live
+            if (isControl(q) || q.op == "WRITE" || q.op == "READ") {
+                addLive(q.res);
+            }
+        }
     }
+
+    std::reverse(kept.begin(), kept.end());
     code.swap(kept);
 }
 
@@ -196,6 +300,124 @@ static bool isPure(const Quad& q) {
            q.op == "%" || q.op == "^" || q.op == "NEG" || q.op == "NOT" ||
            q.op == "&&" || q.op == "||"  || q.op == "<"  || q.op == "<="  ||
            q.op == ">"  || q.op == ">="  || q.op == "=="  || q.op == "!=";
+}
+
+// Simple loop-aware code motion: hoist loop-invariant pure computations to a preheader
+void codeMotion(std::vector<Quad>& code) {
+    std::vector<Quad> out;
+    out.reserve(code.size());
+    size_t i = 0;
+    while (i < code.size()) {
+        const auto& q = code[i];
+        if (q.op != "LABEL") {
+            out.push_back(q);
+            ++i;
+            continue;
+        }
+
+        const std::string label = q.res;
+        size_t backIdx = code.size();
+        int jumpsToLabel = 0;
+        bool hasPrevJump = false;
+        for (size_t k = 0; k < i; ++k) {
+            if ((code[k].op == "GOTO" || code[k].op == "JZ" || code[k].op.rfind("IF", 0) == 0) &&
+                code[k].res == label) {
+                hasPrevJump = true;
+                break;
+            }
+        }
+        // find a backward GOTO that closes the loop
+        for (size_t k = i + 1; k < code.size(); ++k) {
+            if (code[k].op == "GOTO" && code[k].res == label) {
+                backIdx = k;
+                jumpsToLabel++;
+                break;
+            }
+            if (code[k].op == "LABEL" && k != i) break; // stop at next block
+        }
+        // count other jumps to this label within the same block
+        for (size_t k = i + 1; k < backIdx && k < code.size(); ++k) {
+            if ((code[k].op == "GOTO" || code[k].op == "JZ" || code[k].op.rfind("IF", 0) == 0) &&
+                code[k].res == label) {
+                jumpsToLabel++;
+            }
+        }
+
+        if (hasPrevJump || backIdx == code.size() || jumpsToLabel > 1) {
+            // not a simple loop, keep as is
+            out.push_back(q);
+            ++i;
+            continue;
+        }
+
+        // collect writes inside loop body [i+1, backIdx)
+        std::unordered_map<std::string, int> writeCount;
+        std::unordered_set<std::string> bodyWrites;
+        for (size_t k = i + 1; k < backIdx; ++k) {
+            const auto& bq = code[k];
+            if (bq.op == "READ" && bq.arg1 != "-") {
+                writeCount[bq.arg1]++;
+                bodyWrites.insert(bq.arg1);
+            }
+            if (bq.res != "-" && !bq.res.empty()) {
+                writeCount[bq.res]++;
+                bodyWrites.insert(bq.res);
+            }
+        }
+
+        std::vector<Quad> hoist;
+        std::unordered_set<size_t> skipIdx;
+        for (size_t k = i + 1; k < backIdx; ++k) {
+            const auto& bq = code[k];
+            if (!(isPure(bq) || bq.op == "=" || bq.op == "MOV")) continue;
+            if (bq.res == "-" || bq.res.empty()) continue;
+            // only hoist if result is a temp and written once in loop
+            if (writeCount[bq.res] != 1) continue;
+            if (bq.res.rfind("t", 0) != 0) continue; // be conservative: only temps
+
+            auto operandSafe = [&](const std::string& s) {
+                if (s == "-" || s.empty()) return true;
+                long long v = 0;
+                if (isImm(s, v)) return true;
+                return bodyWrites.find(s) == bodyWrites.end();
+            };
+            if (!operandSafe(bq.arg1) || !operandSafe(bq.arg2)) continue;
+
+            hoist.push_back(bq);
+            skipIdx.insert(k);
+        }
+
+        if (hoist.empty()) {
+            out.push_back(q);
+            ++i;
+            continue;
+        }
+
+        // create preheader label
+        std::string preLabel = label + "_pre";
+        out.push_back({"LABEL", "-", "-", preLabel});
+        for (auto& h : hoist) out.push_back(h);
+        out.push_back(q); // original loop label
+
+        // copy loop body, skipping hoisted instructions
+        for (size_t k = i + 1; k <= backIdx; ++k) {
+            if (skipIdx.count(k)) continue;
+            Quad nq = code[k];
+            // keep back edge targeting the original label; no other jumps expected here
+            out.push_back(nq);
+        }
+
+        // advance
+        i = backIdx + 1;
+        // retarget future jumps to this loop entry to the preheader
+        for (size_t k = i; k < code.size(); ++k) {
+            auto& fq = code[k];
+            if ((fq.op == "GOTO" || fq.op == "JZ" || fq.op.rfind("IF", 0) == 0) && fq.res == label) {
+                fq.res = preLabel;
+            }
+        }
+    }
+    code.swap(out);
 }
 
 void copyPropagate(std::vector<Quad>& code) {
